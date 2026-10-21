@@ -1,10 +1,9 @@
-"""Выбор модели среди допустимых.
+"""Choosing a model among the acceptable ones.
 
-Названий здесь нет. Порядок такой: пожелание из настроек (если модель
-допустима), затем лучшая по **собственным прогонам** проекта, затем — пока
-прогонов нет — первая в списке OpenCode. Последнее честно называется догадкой:
-угадывать качество по названию модели было бы тем же хардкодом, только
-спрятанным в код.
+No names here. The order: the preference from settings (if that model is
+acceptable), then the best by the project's **own runs**, then - while there are
+no runs - the first in OpenCode's list. The last one is honestly called a guess:
+judging quality by a model's name would be the same hardcoding, hidden in code.
 """
 
 from __future__ import annotations

@@ -1,69 +1,78 @@
 # agent-offload
 
-Передайте объёмную работу бесплатным моделям [OpenCode](https://opencode.ai), а своему
-основному агенту — Claude, Codex, Antigravity, любому — оставьте только цель, короткий
-итог и проверку. Дорогие токены уходят на решения, а не на набор текста.
+Hand bulk work to [OpenCode](https://opencode.ai)'s free models, and leave your main
+agent - Claude, Codex, Antigravity, anything - only the goal, a short verdict and the
+check. Expensive tokens go to decisions, not to typing.
 
-> **Статус: ранняя версия.** Готовы `init`, поиск допустимых моделей и выбор. Команда
-> `offload delegate` (запуск исполнителя, ветка, машинная проверка, сжатый вердикт) —
-> следующий шаг. Тексты пока на русском.
+> **Status: early.** `init`, acceptable-model discovery and selection are done.
+> `offload delegate` (run the executor, branch, machine check, compressed verdict)
+> is the next step.
 
-## Как это устроено
+## The easy way to use it
 
-Оркестратору нужно одно умение — выполнить команду в консоли, поэтому набор не привязан
-к конкретному агенту. Всё общее лежит в нейтральных файлах (`AGENTS.md`, `.offload/`), а
-`skills/offload/SKILL.md` — подсказка для тех сред, что читают навыки.
+You do not need to learn the commands. Give this repository to your agent and say:
+
+> Install agent-offload and run `offload init` in this project.
+
+Then it can delegate on its own. The commands below are what it calls.
+
+## How it works
+
+The orchestrator needs one ability - run a shell command - so the kit is not tied to a
+particular agent. Everything shared lives in neutral files (`AGENTS.md`, `.offload/`),
+and `skills/offload/SKILL.md` is a hint for environments that read skills.
 
 ```
-offload init                       развернуть набор в проекте
-offload models [--allowed]         модели и допустимы ли они по политике
-offload pick --role build -v       выбрать модель
-offload allow|deny <модель>        ручное исключение
-offload discover                   обновить данные с официальных страниц
+offload init                       set the kit up in a project
+offload models [--allowed]         models, and whether the policy allows them
+offload pick --role build -v       choose a model
+offload allow|deny <model>         manual exception
+offload discover                   refresh data from the official pages
 ```
 
-У каждой команды есть `--json` для машинного разбора.
+Every command has `--json` for machine parsing.
 
-## Ничего не зашито
+## Nothing is hardcoded
 
-В репозитории нет ни одного названия модели и ни одного вердикта о ней. Список моделей
-берётся у самого `opencode`, условия обработки данных — с официальной страницы, итог
-кэшируется на сутки. Выбор среди допустимых — по **вашим же прогонам**: рейтинги
-популярности качества не показывают, а чужие замеры меряют чужие задачи. Пока прогонов
-нет, выбор честно помечается как догадка (`basis: guess`).
+The repository contains no model name and no verdict about one. The model list comes
+from `opencode` itself, data-handling terms from the official page, and the result is
+cached for a day. The choice among acceptable models is based on **your own runs**:
+popularity rankings do not show quality, and other people's benchmarks measure other
+people's tasks. Until there are runs the choice is honestly labelled a guess
+(`basis: guess`).
 
-## Приватность
+## Privacy
 
-Бесплатные модели работают на чужих серверах: ваш код туда **уходит**, а у части моделей
-запросы идут в обучение. Поэтому `init` спрашивает, что за код:
+Free models run on someone else's servers: your code **leaves your machine**, and for
+some models prompts are used for training. So `init` asks what kind of code this is:
 
-| Набор | Что допускает |
+| Preset | What it allows |
 |---|---|
-| `strict` | без обучения и без хранения запросов |
-| `private` | без обучения, хранение до 30 дней |
-| `open` | всё, включая модели, что учатся на запросах |
+| `strict` | no training, no retention of prompts |
+| `private` | no training, retention up to 30 days |
+| `open` | anything, including models that train on prompts |
 
-Без человека (оркестратор запустил `init` сам) выбирается `strict`. Главное правило:
-**неизвестное запрещено.** Модель без данных о приватности не допускается, пока вы не
-разрешите её вручную, — иначе сломавшийся разбор страницы молча открыл бы доступ ко всему.
+Without a human (an orchestrator ran `init` itself) `strict` is chosen. The core rule:
+**unknown is denied.** A model with no privacy data is not allowed until you allow it
+manually - otherwise a broken page parser would silently open access to everything.
 
-Профили агентов запрещают исполнителю выход за папку проекта (по умолчанию OpenCode его
-**разрешает**), чтение `*.env` и ключей и `git push`. Запреты явные: без человека флаг
-`--auto` одобряет всё, что прямо не запрещено.
+Agent profiles forbid the executor from leaving the project folder (OpenCode **allows**
+it by default), reading `*.env` and keys, and `git push`. The denies are explicit:
+without a human the `--auto` flag approves everything not denied outright.
 
-## Установка
+## Install
 
 ```
-pip install .        # или: python -m offload ...
+pip install .        # or run in place: python -m offload ...
 ```
 
-Зависимостей нет: набор ставят в чужие проекты, и тянуть туда лишнее нельзя.
-Нужен `opencode` в `PATH` и Python 3.10+.
+No dependencies: the kit is installed into other people's projects, and pulling extras
+into them would be rude. Needs `opencode` on `PATH` and Python 3.10+.
 
-## Честно про экономию
+## Honest note on savings
 
-Выигрыш растёт с размером задачи и падает со слабостью проверки. Мелочи и всё, что нечем
-проверить, делегировать не стоит: разбирать плохой код слабой модели дороже, чем написать
-самому. Без команды проверки (`verify`) набор делегировать откажется.
+The gain grows with task size and shrinks with a weak check. Do not delegate small
+things or anything you cannot verify: reviewing a weak model's bad code costs more than
+writing it yourself. Without a check command (`verify`) the kit refuses to delegate.
 
-Лицензия — MIT.
+License: MIT.

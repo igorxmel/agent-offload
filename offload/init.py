@@ -1,15 +1,15 @@
-"""`offload init`: разворачивает набор в любом проекте одной командой.
+"""`offload init`: sets the kit up in any project with one command.
 
-Свойства, ради которых он написан так:
+The properties it is written for:
 
-- **Повторяемый.** Запуск поверх существующей установки обновляет то, что
-  принадлежит набору, и не трогает то, что принадлежит человеку (политику,
-  настройки, его собственный `AGENTS.md` вне нашего блока).
-- **Работает без человека.** Оркестраторы запускают команды без клавиатуры,
-  поэтому вопросов должно быть можно избежать флагами, а при их отсутствии
-  выбирается самая строгая политика приватности, а не самая мягкая.
-- **Ничего не ломает.** Чужие файлы не перезаписываются: если что-то нельзя
-  сделать безопасно, об этом говорится, а не делается молча.
+- **Repeatable.** Running over an existing install updates what belongs to the
+  kit and leaves what belongs to the person alone (policy, settings, their own
+  `AGENTS.md` outside our block).
+- **Works without a human.** Orchestrators run commands with no keyboard, so
+  every question must be avoidable with a flag, and with neither the strictest
+  privacy policy is chosen, not the loosest.
+- **Breaks nothing.** Foreign files are never overwritten: if something cannot be
+  done safely, that is said out loud instead of done silently.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from offload import agents, config, opencode, paths, policy, texts
 
 
 def detect_verify(root: Path) -> str:
-    """Угадывает команду проверки по признакам проекта; пусто — не угадал."""
+    """Guesses the check command from project markers; empty means no guess."""
     if (root / "pyproject.toml").exists() or (root / "pytest.ini").exists():
         return "python -m pytest -q"
     if (root / "package.json").exists():
@@ -34,24 +34,27 @@ def detect_verify(root: Path) -> str:
 
 
 def ask_preset(stream_in=None, stream_out=None) -> str:
-    """Спрашивает, что за код. Возвращает имя набора политики."""
+    """Asks what kind of code this is. Returns the policy preset name."""
     stream_in = stream_in or sys.stdin
     stream_out = stream_out or sys.stdout
 
     names = list(policy.PRESETS)
-    print("\nЧто за код в этом проекте? От этого зависит, каким моделям его можно "
-          "отправлять.\nБесплатные модели работают на чужих серверах.\n", file=stream_out)
+    print(
+        "\nWhat kind of code is in this project? It decides which models your code may be "
+        "sent to.\nFree models run on someone else's servers.\n",
+        file=stream_out,
+    )
     for index, name in enumerate(names, 1):
         print(f"  {index}. {name:<8} {policy.PRESETS[name]['about']}", file=stream_out)
     print(file=stream_out)
 
     while True:
-        stream_out.write(f"Номер [1 = {names[0]}]: ")
+        stream_out.write(f"Number [1 = {names[0]}]: ")
         stream_out.flush()
         raw = stream_in.readline()
         if raw == "":
-            # Конец ввода, а не пустая строка: вопрос задавать некому.
-            raise EOFError("ввод закрыт")
+            # End of input, not an empty line: there is nobody to ask.
+            raise EOFError("input closed")
         answer = raw.strip()
         if not answer:
             return names[0]
@@ -59,21 +62,21 @@ def ask_preset(stream_in=None, stream_out=None) -> str:
             return names[int(answer) - 1]
         if answer in policy.PRESETS:
             return answer
-        print("Нужен номер из списка.", file=stream_out)
+        print("Enter a number from the list.", file=stream_out)
 
 
 def _managed_block(section: str, verify: str) -> str:
-    return section.replace("{verify}", verify or "не задана: укажите в .offload/config.json")
+    return section.replace("{verify}", verify or "not set: define it in .offload/config.json")
 
 
 def write_agents_md(root: Path, verify: str) -> str:
-    """Вставляет или обновляет наш блок в AGENTS.md. Остальное не трогает."""
+    """Inserts or updates our block in AGENTS.md. Touches nothing else."""
     path = root / "AGENTS.md"
     block = _managed_block(texts.AGENTS_SECTION, verify)
 
     if not path.exists():
-        path.write_text(f"# Правила проекта\n\n{block}", encoding="utf-8")
-        return "создан AGENTS.md"
+        path.write_text(f"# Project rules\n\n{block}", encoding="utf-8")
+        return "created AGENTS.md"
 
     text = path.read_text(encoding="utf-8")
     begin, end = text.find(texts.MARK_BEGIN), text.find(texts.MARK_END)
@@ -81,13 +84,13 @@ def write_agents_md(root: Path, verify: str) -> str:
         end += len(texts.MARK_END)
         new = text[:begin] + block.rstrip("\n") + text[end:]
         if new == text:
-            return "AGENTS.md актуален"
+            return "AGENTS.md is up to date"
         path.write_text(new, encoding="utf-8")
-        return "обновлён блок в AGENTS.md"
+        return "updated the block in AGENTS.md"
 
     separator = "" if text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
     path.write_text(text + separator + block, encoding="utf-8")
-    return "добавлен блок в AGENTS.md"
+    return "added a block to AGENTS.md"
 
 
 def write_if_changed(path: Path, content: str) -> bool:
@@ -104,19 +107,23 @@ def ensure_gitignore(root: Path) -> str:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     if line in text.splitlines():
         return ""
-    path.write_text(text + ("" if text.endswith("\n") or not text else "\n") + line + "\n",
-                    encoding="utf-8")
-    return f"в .gitignore добавлено {line}"
+    separator = "" if text.endswith("\n") or not text else "\n"
+    path.write_text(text + separator + line + "\n", encoding="utf-8")
+    return f"added {line} to .gitignore"
 
 
-def init(root: Path, privacy: str | None = None, verify: str | None = None,
-         interactive: bool | None = None) -> list[str]:
-    """Разворачивает набор. Возвращает строки отчёта для человека."""
+def init(
+    root: Path,
+    privacy: str | None = None,
+    verify: str | None = None,
+    interactive: bool | None = None,
+) -> list[str]:
+    """Sets the kit up. Returns report lines for the person."""
     report: list[str] = []
     if interactive is None:
         interactive = sys.stdin.isatty()
 
-    # Приватность: флаг важнее вопроса, а без обоих — самое строгое.
+    # Privacy: a flag beats the question, and with neither the strictest wins.
     first_time = not paths.policy_file(root).exists()
     if first_time:
         if privacy is None:
@@ -127,16 +134,16 @@ def init(root: Path, privacy: str | None = None, verify: str | None = None,
             except EOFError:
                 privacy = policy.DEFAULT_PRESET
                 report.append(
-                    f"приватность: выбрана строгая ({privacy}), потому что вопрос некому задать. "
-                    "Изменить: offload init --privacy open|private|strict (на пустом месте) "
-                    f"или править {paths.DIR_NAME}/policy.json"
+                    f"privacy: chose the strictest ({privacy}) because there is nobody to ask. "
+                    "To change: edit .offload/policy.json, or delete it and run "
+                    "offload init --privacy open|private|strict"
                 )
         if privacy not in policy.PRESETS:
-            raise SystemExit(f"неизвестная политика «{privacy}»; есть: {', '.join(policy.PRESETS)}")
+            raise SystemExit(f"unknown policy '{privacy}'; choose from: {', '.join(policy.PRESETS)}")
         policy.save(root, policy.Policy.from_preset(privacy))
-        report.append(f"политика приватности: {privacy} — {policy.PRESETS[privacy]['about']}")
+        report.append(f"privacy policy: {privacy} - {policy.PRESETS[privacy]['about']}")
     else:
-        report.append("политика приватности уже задана — не меняю")
+        report.append("privacy policy already set - leaving it alone")
 
     cfg = config.load(root)
     if verify is not None:
@@ -146,32 +153,38 @@ def init(root: Path, privacy: str | None = None, verify: str | None = None,
     if first_time or verify is not None or not paths.config_file(root).exists():
         config.save(root, cfg)
     report.append(
-        f"проверка результата: {cfg.verify}" if cfg.verify
-        else "проверка результата: НЕ ОПРЕДЕЛЕНА — без неё делегировать нельзя, "
-             f"укажите verify в {paths.DIR_NAME}/config.json"
+        f"result check: {cfg.verify}"
+        if cfg.verify
+        else "result check: NOT DEFINED - delegating is impossible without one, "
+        f"set verify in {paths.DIR_NAME}/config.json"
     )
 
     if write_if_changed(paths.offload_dir(root) / "protocol.md", texts.PROTOCOL):
-        report.append("записан .offload/protocol.md")
+        report.append("wrote .offload/protocol.md")
     report.append(write_agents_md(root, cfg.verify))
 
-    changed = [name for name, body in agents.files().items()
-               if write_if_changed(paths.agents_dir(root) / name, body)]
-    report.append(f"агенты OpenCode: обновлено {len(changed)} из {len(agents.files())}")
+    changed = [
+        name
+        for name, body in agents.files().items()
+        if write_if_changed(paths.agents_dir(root) / name, body)
+    ]
+    report.append(f"OpenCode agents: updated {len(changed)} of {len(agents.files())}")
 
     if note := ensure_gitignore(root):
         report.append(note)
 
     claude = root / "CLAUDE.md"
     if not claude.exists():
-        claude.write_text("# Правила проекта — в [AGENTS.md](AGENTS.md)\n", encoding="utf-8")
-        report.append("создан CLAUDE.md-указатель (Claude Code читает его, а не AGENTS.md)")
+        claude.write_text("# Project rules - see [AGENTS.md](AGENTS.md)\n", encoding="utf-8")
+        report.append("created a CLAUDE.md pointer (Claude Code reads it, not AGENTS.md)")
     elif "AGENTS.md" not in claude.read_text(encoding="utf-8"):
-        report.append("CLAUDE.md не ссылается на AGENTS.md — добавьте ссылку, иначе Claude Code "
-                      "не увидит правил делегирования")
+        report.append(
+            "CLAUDE.md does not link to AGENTS.md - add a link, or Claude Code "
+            "will not see the delegation rules"
+        )
 
     try:
-        report.append(f"opencode найден: {opencode.version()}")
+        report.append(f"opencode found: {opencode.version()}")
     except opencode.OpenCodeError as error:
-        report.append(f"ВНИМАНИЕ: {error}")
+        report.append(f"WARNING: {error}")
     return report

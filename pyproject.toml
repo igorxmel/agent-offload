@@ -6,8 +6,8 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
-# Нарочно без зависимостей: набор ставят в чужие проекты, и тянуть туда
-# что-то ещё значило бы ломать чужое окружение.
+# Deliberately none: the kit is installed into other people's projects, and
+# pulling anything else into them would break their environment.
 dependencies = []
 
 [project.optional-dependencies]

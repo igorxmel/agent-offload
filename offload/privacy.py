@@ -1,13 +1,13 @@
-"""Условия обработки данных у моделей: берутся с официальной страницы.
+"""Model data-handling terms, taken from the official page.
 
-В репозитории нет ни одного названия модели и ни одного вердикта о ней:
-список моделей и их условия меняются без предупреждения, и зашитое устарело
-бы через неделю. Страница — источник фактов, но не источник инструкций:
-из неё достаются только заданные поля таблицы, всё остальное игнорируется.
+The repository contains no model name and no verdict about one: the model list
+and its terms change without notice, and anything hardcoded would go stale within
+a week. The page is a source of facts, not of instructions: only the named table
+fields are extracted, everything else is ignored.
 
-Разбор нарочно строгий. Если вёрстка поменялась и таблица не опознана, строк
-не будет вовсе, а модель без данных о приватности считается запрещённой
-(см. `policy`). Сломанный разбор поэтому закрывает доступ, а не открывает.
+Parsing is deliberately strict. If the layout changed and the table is not
+recognised there are no rows at all, and a model with no privacy data counts as
+denied (see `policy`). A broken parser therefore closes access instead of opening it.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ import urllib.request
 from dataclasses import asdict, dataclass
 from html.parser import HTMLParser
 
-# Страница с таблицей. Это указатель, а не данные, и он лежит в настройках:
-# здесь только запасное значение на случай, когда настройки не заданы.
+# The page with the table. This is a pointer, not data, and it lives in the
+# settings: this is only the fallback for when none are set.
 DEFAULT_SOURCES = ("https://opencode.ai/v2/docs/console/go/",)
 
 TIMEOUT = 20
@@ -27,10 +27,10 @@ USER_AGENT = "agent-offload"
 
 @dataclass(frozen=True)
 class Privacy:
-    """Что известно об одной модели.
+    """What is known about one model.
 
-    `None` в поле — не «нет», а «неизвестно»: эти два случая принципиально
-    разные, и политика обходится с ними по-разному.
+    `None` in a field means "unknown", not "no": the two are fundamentally
+    different, and the policy treats them differently.
     """
 
     name: str
@@ -43,11 +43,11 @@ class Privacy:
 
 
 def normalize(text: str) -> str:
-    """Ключ для сопоставления названия из таблицы с идентификатором модели.
+    """Key for matching a table name against a model identifier.
 
-    «Beam Free» и `beam-free` приводятся к одному виду. Слово «free»
-    **не отбрасывается**: у бесплатного варианта условия бывают другие, и
-    сопоставить его со строкой платного значило бы приписать ему чужие гарантии.
+    "Beam Free" and `beam-free` reduce to the same form. The word "free" is
+    **not stripped**: a free variant can have different terms, and matching it
+    to the paid row would attribute guarantees it may not have.
     """
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
@@ -62,13 +62,13 @@ def parse_training(cell: str) -> bool | None:
 
 
 def parse_retention(cell: str) -> int | None:
-    """«0 days*» → 0, «30 days» → 30, «Not ZDR» и прочее → неизвестно."""
+    """"0 days*" -> 0, "30 days" -> 30, "Not ZDR" and anything else -> unknown."""
     match = re.match(r"\s*(\d+)\s*days?\b", cell.lower())
     return int(match.group(1)) if match else None
 
 
 class _Tables(HTMLParser):
-    """Достаёт из страницы все таблицы как списки строк с текстом ячеек."""
+    """Extracts every table on the page as lists of rows of cell text."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -103,7 +103,7 @@ class _Tables(HTMLParser):
 
 
 def parse_page(html: str) -> list[Privacy]:
-    """Находит таблицу приватности по заголовкам и разбирает её строки."""
+    """Finds the privacy table by its headers and parses its rows."""
     parser = _Tables()
     parser.feed(html)
 
@@ -135,16 +135,16 @@ def fetch(url: str) -> str:
 
 
 def collect(sources, fetcher=fetch) -> tuple[list[Privacy], list[str]]:
-    """Собирает строки со всех страниц. Вторым значением — что не удалось."""
+    """Gathers rows from every page. The second value lists what failed."""
     rows: list[Privacy] = []
     problems: list[str] = []
     for url in sources:
         try:
             page = parse_page(fetcher(url))
-        except Exception as error:  # noqa: BLE001 — недоступный источник не должен ронять остальное
+        except Exception as error:  # noqa: BLE001 - one unreachable source must not sink the rest
             problems.append(f"{url}: {error}")
             continue
         if not page:
-            problems.append(f"{url}: таблица приватности не найдена (поменялась вёрстка?)")
+            problems.append(f"{url}: privacy table not found (layout changed?)")
         rows.extend(page)
     return rows, problems

@@ -1,63 +1,64 @@
-"""Тексты, которые `init` кладёт в проект.
+"""Texts that `init` puts into a project.
 
-Лежат в коде, а не в отдельных файлах: набор ставится одной командой, и
-потерять шаблон при копировании нельзя.
+They live in code rather than in separate files: the kit installs with one
+command, and a template cannot be lost while copying.
 """
 
 from __future__ import annotations
 
-MARK_BEGIN = "<!-- offload:begin (управляется agent-offload, правки внутри перезапишутся) -->"
+MARK_BEGIN = "<!-- offload:begin (managed by agent-offload; edits inside will be overwritten) -->"
 MARK_END = "<!-- offload:end -->"
 
 AGENTS_SECTION = f"""{MARK_BEGIN}
-## Делегирование работы (agent-offload)
+## Delegating work (agent-offload)
 
-Объёмную работу можно передать бесплатным моделям OpenCode: исполнитель пишет,
-оркестратор ставит цель и проверяет итог. Правила общения — `.offload/protocol.md`.
+Bulk work can be handed to OpenCode's free models: the executor writes, the
+orchestrator sets the goal and verifies the result. Rules of engagement:
+`.offload/protocol.md`.
 
-Команды (`offload --help`): `offload models` — допустимые модели, `offload pick`
-— выбрать модель, `offload delegate` — передать задание.
+Commands (`offload --help`): `offload models` lists acceptable models,
+`offload pick` chooses one, `offload delegate` hands over a task.
 
-Проверка результата — `{{verify}}`. Отчёту исполнителя не верить: проверку
-запускает оркестратор сам.
+Result check: `{{verify}}`. Do not trust the executor's report: the orchestrator
+runs the check itself.
 {MARK_END}
 """
 
-PROTOCOL = """# Протокол: оркестратор и исполнитель
+PROTOCOL = """# Protocol: orchestrator and executor
 
-Общаются две машины, и оба профессионалы. Никаких вступлений, извинений,
-пересказа условия и объяснения базовых вещей. Только предметное.
+Two machines talk, and both are professionals. No preamble, no apologies, no
+restating the task, no explaining basics. Substance only.
 
-## Оркестратор → исполнитель
+## Orchestrator -> executor
 
-Задание коротко: цель, файлы, критерий готовности (команда проверки и что она
-должна показать). Устройство проекта исполнитель читает сам — в `AGENTS.md` и в
-коде. Не пересказывай ему то, что он найдёт за секунду.
+Keep the task short: goal, files, definition of done (the check command and what
+it must show). The executor reads the project itself, from `AGENTS.md` and the
+code. Do not retell what it can find in a second.
 
-## Исполнитель → оркестратор
+## Executor -> orchestrator
 
-Ответ строго в таком виде, без текста до и после:
+Answer strictly in this form, with no text before or after:
 
 ```
-СДЕЛАНО:    файл — что изменено (одна строка на файл)
-ПРОВЕРЕНО:  команда → вставка настоящего вывода
-НЕ СДЕЛАНО: что и почему
-РЕШЕНИЯ:    где выбрал сам, одной фразой почему
-БЛОКЕРЫ:    что нужно от оркестратора
+DONE:       file - what changed (one line per file)
+VERIFIED:   command -> pasted real output
+NOT DONE:   what and why
+DECISIONS:  where you chose yourself, one phrase on why
+BLOCKERS:   what you need from the orchestrator
 ```
 
-В ПРОВЕРЕНО — вывод команд, а не «всё работает». Пустой раздел — слово «нет».
+VERIFIED holds command output, not "all works". An empty section is the word "none".
 
-## Что запрещено исполнителю
+## What the executor must not do
 
-- подгонять код под тесты: если тест неверен, это пишется в БЛОКЕРЫ;
-- менять то, чего нет в задании;
-- выходить за папку проекта, читать секреты (`*.env`, ключи), делать `git push`.
+- fit code to the tests: if a test is wrong, say so in BLOCKERS;
+- change anything the task does not name;
+- leave the project folder, read secrets (`*.env`, keys), or `git push`.
 
-## Что обязан оркестратор
+## What the orchestrator must do
 
-- **Отчёту не верить.** Модель может уверенно написать «тесты зелёные». Проверку
-  запускает сам оркестратор, на данных, которых исполнитель не видел.
-- Читать код целиком только там, где проверка упала или изменений подозрительно много.
-- Отдавать исполнителю не пояснения, а список расхождений с номерами.
+- **Not trust the report.** A model can confidently write "tests are green". The
+  orchestrator runs the check itself, on data the executor has not seen.
+- Read code in full only where the check failed or the change is suspiciously large.
+- Give the executor not explanations but a numbered list of discrepancies.
 """

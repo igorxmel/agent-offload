@@ -1,9 +1,9 @@
-"""Что есть сейчас: модели, условия обработки данных, итог по политике.
+"""What exists right now: models, data-handling terms, the policy verdict.
 
-Результат кэшируется на сутки: страница меняется редко, а ходить на неё при
-каждом вызове значило бы тормозить оркестратора на каждом шаге. Если сеть
-недоступна, берётся устаревший кэш с предупреждением; если нет и его — модели
-остаются без данных о приватности, а значит запрещены (см. `policy`).
+The result is cached for a day: the page rarely changes, and hitting it on every
+call would slow the orchestrator down at every step. If the network is down the
+stale cache is used with a warning; if there is none either, models stay without
+privacy data and are therefore denied (see `policy`).
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def _read_cache(root: Path, ttl_hours: int, now: float) -> dict | None:
 
 
 def _facts(root: Path, cfg: config_mod.Config, refresh: bool, fetcher, lister, now: float):
-    """Модели и таблица приватности: из кэша или с источника."""
+    """Models and the privacy table: from cache or from the source."""
     cached = _read_cache(root, cfg.ttl_hours, now)
     if cached and not cached["stale"] and not refresh:
         return cached, []
@@ -54,15 +54,15 @@ def _facts(root: Path, cfg: config_mod.Config, refresh: bool, fetcher, lister, n
         model_ids = lister()
     except opencode.OpenCodeError as error:
         if cached:
-            return cached, [f"список моделей не обновлён ({error}); взят прошлый"]
+            return cached, [f"model list not refreshed ({error}); using the previous one"]
         raise
 
     rows, problems = privacy.collect(cfg.sources, fetcher)
     warnings.extend(problems)
     if not rows and cached:
-        # Страница недоступна или изменилась: прежние данные лучше, чем их отсутствие.
+        # Page unreachable or changed: previous data beats no data.
         rows = [privacy.Privacy(**row) for row in cached.get("privacy", [])]
-        warnings.append("таблица приватности не получена; использованы прошлые данные")
+        warnings.append("privacy table not retrieved; using previous data")
 
     data = {
         "fetched_at": now,
@@ -80,7 +80,7 @@ def discover(
     lister=opencode.models,
     now: float | None = None,
 ) -> Snapshot:
-    """Собирает актуальную картину и применяет к ней политику проекта."""
+    """Builds the current picture and applies the project policy to it."""
     now = time.time() if now is None else now
     cfg = config_mod.load(root)
     pol = policy.load(root)
@@ -97,5 +97,5 @@ def discover(
         entries.append(Entry(model_id, info, verdict.allowed, verdict.reason))
 
     if data.get("stale") and not refresh:
-        warnings.append("данные устарели; обновить: offload discover --refresh")
+        warnings.append("data is stale; refresh with: offload discover")
     return Snapshot(fetched_at=data["fetched_at"], entries=entries, warnings=warnings)

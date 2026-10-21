@@ -1,8 +1,8 @@
-"""Где что лежит внутри проекта.
+"""Where things live inside a project.
 
-Всё, что набор создаёт в чужом проекте, живёт в одной папке `.offload/`:
-удалить её значит убрать набор целиком. Исключение — файлы, которые обязаны
-лежать там, где их ищут сами агенты (`AGENTS.md`, `.opencode/agents`).
+Everything the kit creates in someone else's project lives in one folder,
+`.offload/`: deleting it removes the kit. The exceptions are files that must sit
+where the agents themselves look for them (`AGENTS.md`, `.opencode/agents`).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ def policy_file(root: Path) -> Path:
 
 
 def state_dir(root: Path) -> Path:
-    """Всё, что пересоздаётся само и в репозиторий не едет."""
+    """Everything that regenerates itself and stays out of the repository."""
     return offload_dir(root) / "state"
 
 

@@ -1,7 +1,7 @@
-"""Разбор страницы приватности и политика.
+"""Privacy page parsing and the policy.
 
-Образец страницы — настоящий, снят с официального сайта. Проверяется то, на
-чём набор может навредить: ошибиться в сторону «разрешено».
+The sample page is real, captured from the official site. What is checked is
+where the kit could do harm: erring towards "allowed".
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def rows() -> dict[str, Privacy]:
 
 def test_real_page_is_parsed_and_foreign_table_ignored(rows) -> None:
     assert len(rows) > 20
-    assert "a" not in rows  # посторонняя таблица без нужных заголовков
+    assert "a" not in rows  # an unrelated table without the right headers
 
 
 def test_training_and_retention_are_read_correctly(rows) -> None:
@@ -32,7 +32,7 @@ def test_training_and_retention_are_read_correctly(rows) -> None:
     assert rows["GLM-5.3-Flash"].retention_days == 0
     assert rows["Claude Haiku 5.5"].retention_days == 30
     assert rows["Gemini 4 Argon Contributor"].trains is True
-    # «Not ZDR» — это не ноль дней, а отсутствие гарантии.
+    # "Not ZDR" is not zero days, it is the absence of a guarantee.
     assert rows["Gemini 4 Argon Contributor"].retention_days is None
 
 
@@ -41,12 +41,12 @@ def test_asterisk_does_not_break_retention() -> None:
 
 
 def test_unrecognised_page_yields_nothing_not_everything() -> None:
-    """Вёрстка поменялась — строк нет, а не «разрешено всё»."""
+    """Layout changed: no rows at all, not "everything allowed"."""
     assert privacy.parse_page("<html><table><tr><th>A</th><th>B</th></tr></table></html>") == []
 
 
 def test_free_suffix_is_not_stripped_when_matching() -> None:
-    """У бесплатного варианта условия бывают другие, чем у платного."""
+    """A free variant can have different terms than the paid one."""
     assert privacy.normalize("Beam Free") == privacy.normalize("beam-free")
     assert privacy.normalize("DeepSeek V4.1 Flash") != privacy.normalize("deepseek-v4.1-flash-free")
 

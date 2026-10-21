@@ -5,40 +5,41 @@ description: Delegate bulk, machine-verifiable work (porting a module, mass edit
 
 # offload
 
-Ты оркестратор. Исполнитель — бесплатные модели OpenCode, запускаемые из консоли.
-Твои токены тратятся на цель, короткий итог и проверку, а не на написание кода.
+You are the orchestrator. The executor is OpenCode's free models, run from the console.
+Your tokens go to the goal, a short verdict and the check - not to writing code.
 
-## Когда делегировать, когда нет
+## When to delegate and when not
 
-Делегируй, если задача **большая** и результат проверяется **командой**.
-Не делегируй мелочи и всё, что проверить нечем: разбирать плохой код слабой модели
-дороже, чем написать самому. Если в `.offload/config.json` пустое `verify`, делегировать нельзя.
+Delegate when the task is **large** and the result is checkable by a **command**.
+Do not delegate small things or anything you cannot verify: reviewing a weak model's
+bad code costs more than writing it yourself. If `verify` in `.offload/config.json` is
+empty, delegating is not allowed.
 
-## Первый раз в проекте
+## First time in a project
 
 ```
 offload init
 ```
 
-Развернёт `.offload/`, профили агентов в `.opencode/agents/` и блок в `AGENTS.md`.
-Если у тебя нет клавиатуры, передай `--privacy strict|private|open`; без флага
-выберется самое строгое. **Политику приватности не ослабляй сам** — это решение
-владельца проекта: бесплатные модели работают на чужих серверах, а часть из них
-учится на запросах.
+Sets up `.offload/`, the agent profiles in `.opencode/agents/` and a block in
+`AGENTS.md`. With no keyboard pass `--privacy strict|private|open`; without the flag the
+strictest is chosen. **Do not loosen the privacy policy yourself** - that is the project
+owner's decision: free models run on someone else's servers, and some of them train on
+prompts. If the owner is available, tell them about the choice you made.
 
-## Выбор модели
+## Choosing a model
 
 ```
-offload models --allowed --json     # что допустимо по политике проекта
-offload pick --role build -v        # выбрать; basis=guess значит «данных пока нет»
+offload models --allowed --json     # what the project policy allows
+offload pick --role build -v        # choose one; basis=guess means "no data yet"
 ```
 
-Список моделей и их условия берутся с официальных страниц на лету, в репозитории
-их нет. Модель без данных о приватности **запрещена**. Код выхода 2 — допустимых
-моделей нет: скажи об этом человеку, не обходи политику.
+The model list and its terms are fetched from official pages at run time; none are in
+the repository. A model with no privacy data is **denied**. Exit code 2 means no
+acceptable model: tell the human, do not work around the policy.
 
-## Протокол
+## Protocol
 
-Читай `.offload/protocol.md`. Коротко: задание — цель, файлы, критерий готовности;
-ответ исполнителя — СДЕЛАНО / ПРОВЕРЕНО / НЕ СДЕЛАНО / РЕШЕНИЯ / БЛОКЕРЫ.
-**Отчёту не верь**: команду `verify` запускай сам.
+Read `.offload/protocol.md`. In short: the task is goal, files, definition of done; the
+executor answers DONE / VERIFIED / NOT DONE / DECISIONS / BLOCKERS. **Do not trust the
+report**: run `verify` yourself.

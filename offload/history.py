@@ -1,9 +1,9 @@
-"""Что модели реально делали: единственный честный источник качества.
+"""What models actually did: the only honest source of quality data.
 
-Рейтинги популярности качества не показывают, а таблицы с чужими замерами
-меряют чужие задачи. Поэтому после каждого прогона записывается, какая модель
-какую задачу прошла по **проверке** и во что это обошлось. Выбор среди
-допустимых моделей строится по этим записям, а не по слухам.
+Popularity rankings do not show quality, and tables of other people's benchmarks
+measure other people's tasks. So after every run we record which model passed
+which task by the **check**, and what it cost. The choice among acceptable models
+is built from these records, not from hearsay.
 """
 
 from __future__ import annotations
@@ -50,12 +50,12 @@ def load(root: Path) -> list[dict]:
         try:
             entries.append(json.loads(line))
         except ValueError:
-            continue  # оборванная запись не должна лишать всей истории
+            continue  # a truncated record must not cost the whole history
     return entries
 
 
 def stats(root: Path, role: str | None = None) -> dict[str, Stats]:
-    """Сводка по моделям: сколько прогонов и сколько из них прошло проверку."""
+    """Per-model summary: how many runs and how many passed the check."""
     totals: dict[str, list[int]] = {}
     for entry in load(root):
         if role and entry.get("role") != role:

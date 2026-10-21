@@ -1,7 +1,7 @@
-"""Чтение и запись JSON без сюрпризов.
+"""JSON reading and writing without surprises.
 
-Файлы настроек правят руками, и испорченный файл не должен ронять набор с
-трассировкой: человеку нужно сказать, какой файл и что в нём не так.
+Settings files get edited by hand, and a corrupted one must not crash the kit
+with a traceback: the person needs to be told which file and what is wrong.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 
 
 class ConfigError(Exception):
-    """Файл есть, но прочитать его нельзя."""
+    """The file exists but cannot be read."""
 
 
 def read(path: Path, default: Any) -> Any:

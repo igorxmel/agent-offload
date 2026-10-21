@@ -1,13 +1,12 @@
-"""Политика приватности: что считать допустимым для кода этого проекта.
+"""Privacy policy: what counts as acceptable for this project's code.
 
-Политика описывает **правила отбора**, а не названия моделей. Человек говорит
-«обучение на моих запросах запрещено, хранение не дольше недели», а какие
-модели под это подходят, решает свежая таблица с официальной страницы.
+The policy describes **selection rules**, not model names. A person says
+"no training on my prompts, retention no longer than a week", and a fresh table
+from the official page decides which models fit.
 
-Главный принцип: **неизвестное запрещено.** Модель, о которой нет данных, не
-допускается, пока человек не разрешит её сам. Иначе сломавшийся разбор
-страницы молча открыл бы доступ ко всему, включая модели, которые учатся на
-запросах.
+The core principle: **unknown is denied.** A model with no data is not allowed
+until a person allows it. Otherwise a broken page parser would silently open
+access to everything, including models that train on prompts.
 """
 
 from __future__ import annotations
@@ -17,25 +16,25 @@ from dataclasses import dataclass, field
 from offload import jsonio, paths
 from offload.privacy import Privacy, normalize
 
-# Готовые настройки на вопрос «что это за код». Вопрос задаёт `init`.
+# Ready-made answers to "what kind of code is this". `init` asks the question.
 PRESETS: dict[str, dict] = {
     "strict": {
         "allow_training": False,
         "max_retention_days": 0,
         "require_known": True,
-        "about": "закрытый или чувствительный код: без обучения и без хранения запросов",
+        "about": "closed or sensitive code: no training and no retention of prompts",
     },
     "private": {
         "allow_training": False,
         "max_retention_days": 30,
         "require_known": True,
-        "about": "обычный код: без обучения, хранение до 30 дней допустимо",
+        "about": "ordinary code: no training, retention up to 30 days is acceptable",
     },
     "open": {
         "allow_training": True,
         "max_retention_days": None,
         "require_known": False,
-        "about": "открытый код: можно всё, в том числе модели, которые учатся на запросах",
+        "about": "open-source code: anything goes, including models that train on prompts",
     },
 }
 
@@ -47,7 +46,7 @@ class Policy:
     allow_training: bool = False
     max_retention_days: int | None = 0
     require_known: bool = True
-    # Ручные исключения. Хранятся как есть, сравниваются по нормализованному виду.
+    # Manual exceptions. Stored as written, compared in normalised form.
     allowed: list[str] = field(default_factory=list)
     denied: list[str] = field(default_factory=list)
 
@@ -79,7 +78,7 @@ class Verdict:
 def load(root) -> Policy:
     data = jsonio.read(paths.policy_file(root), None)
     if data is None:
-        # Файла нет — действует самая строгая политика, а не самая мягкая.
+        # No file: the strictest policy applies, not the loosest.
         return Policy.from_preset(DEFAULT_PRESET)
     base = Policy.from_preset(DEFAULT_PRESET)
     return Policy(
@@ -96,7 +95,7 @@ def save(root, policy: Policy) -> None:
 
 
 def short_id(model_id: str) -> str:
-    """`opencode/beam-free` → `beam-free`: провайдер в таблице не указан."""
+    """`opencode/beam-free` -> `beam-free`: the table does not name the provider."""
     return model_id.rsplit("/", 1)[-1]
 
 
@@ -106,28 +105,28 @@ def _listed(model_id: str, names: list[str]) -> bool:
 
 
 def evaluate(model_id: str, privacy: Privacy | None, policy: Policy) -> Verdict:
-    """Допустима ли модель. Порядок проверок — порядок важности."""
+    """Whether a model is acceptable. Checks run in order of importance."""
     if _listed(model_id, policy.denied):
-        return Verdict(False, "запрещена вручную")
+        return Verdict(False, "denied manually")
     if _listed(model_id, policy.allowed):
-        return Verdict(True, "разрешена вручную")
+        return Verdict(True, "allowed manually")
 
     if privacy is None:
         if policy.require_known:
-            return Verdict(False, "нет данных о приватности (разрешить: offload allow <модель>)")
-        return Verdict(True, "данных о приватности нет, но политика это допускает")
+            return Verdict(False, "no privacy data (to allow: offload allow <model>)")
+        return Verdict(True, "no privacy data, but the policy permits that")
 
     if privacy.trains is True and not policy.allow_training:
-        return Verdict(False, "запросы идут в обучение")
+        return Verdict(False, "prompts are used for training")
     if privacy.trains is None and policy.require_known:
-        return Verdict(False, "неизвестно, идут ли запросы в обучение")
+        return Verdict(False, "unknown whether prompts are used for training")
 
     limit = policy.max_retention_days
     if limit is not None:
         if privacy.retention_days is None:
             if policy.require_known:
-                return Verdict(False, "срок хранения запросов неизвестен")
+                return Verdict(False, "prompt retention period unknown")
         elif privacy.retention_days > limit:
-            return Verdict(False, f"хранение {privacy.retention_days} дн. при пределе {limit}")
+            return Verdict(False, f"retention {privacy.retention_days} days, limit {limit}")
 
-    return Verdict(True, "подходит под политику")
+    return Verdict(True, "fits the policy")

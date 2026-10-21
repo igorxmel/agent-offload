@@ -1,8 +1,8 @@
-"""Командная строка. Оркестратор вызывает именно её.
+"""Command line. The orchestrator calls this.
 
-Каждая команда умеет `--json`: оркестратор — машина, и разбирать таблицу для
-людей ему незачем. Коды выхода: 0 — успех, 1 — ошибка использования или среды,
-2 — нет допустимых моделей (отдельный код, чтобы его можно было обработать).
+Every command supports `--json`: the orchestrator is a machine and has no use for
+a table meant for humans. Exit codes: 0 success, 1 usage or environment error,
+2 no acceptable models (a separate code so it can be handled).
 """
 
 from __future__ import annotations
@@ -42,12 +42,16 @@ def cmd_models(args) -> int:
     _warn(snap)
     entries = snap.allowed() if args.allowed else snap.entries
     data = [
-        {"id": e.id, "allowed": e.allowed, "reason": e.reason,
-         "privacy": e.privacy.to_dict() if e.privacy else None}
+        {
+            "id": e.id,
+            "allowed": e.allowed,
+            "reason": e.reason,
+            "privacy": e.privacy.to_dict() if e.privacy else None,
+        }
         for e in entries
     ]
-    lines = [f"{'да ' if e.allowed else 'нет'}  {e.id:<44} {e.reason}" for e in entries]
-    _out(args, data, "\n".join(lines) or "моделей нет")
+    lines = [f"{'yes' if e.allowed else 'no '}  {e.id:<44} {e.reason}" for e in entries]
+    _out(args, data, "\n".join(lines) or "no models")
     return 0 if snap.allowed() else EXIT_NO_MODELS
 
 
@@ -57,18 +61,24 @@ def cmd_pick(args) -> int:
     _warn(snap)
     choice = select.pick(root, snap, args.role)
     if choice is None:
-        print("нет ни одной допустимой модели. Смотрите: offload models", file=sys.stderr)
+        print("no acceptable model. See: offload models", file=sys.stderr)
         return EXIT_NO_MODELS
-    _out(args, {"model": choice.model, "basis": choice.basis},
-         choice.model if not args.verbose else f"{choice.model}  ({choice.basis})")
+    _out(
+        args,
+        {"model": choice.model, "basis": choice.basis},
+        f"{choice.model}  ({choice.basis})" if args.verbose else choice.model,
+    )
     return 0
 
 
 def cmd_discover(args) -> int:
     snap = discover.discover(_root(args), refresh=True)
     _warn(snap)
-    _out(args, {"models": len(snap.entries), "allowed": len(snap.allowed())},
-         f"моделей: {len(snap.entries)}, допустимых: {len(snap.allowed())}")
+    _out(
+        args,
+        {"models": len(snap.entries), "allowed": len(snap.allowed())},
+        f"models: {len(snap.entries)}, acceptable: {len(snap.allowed())}",
+    )
     return 0
 
 
@@ -79,40 +89,41 @@ def _edit_list(args, field: str, other: str) -> int:
     if args.model not in getattr(pol, field):
         getattr(pol, field).append(args.model)
     policy.save(root, pol)
-    print(f"{args.model}: {'разрешена' if field == 'allowed' else 'запрещена'} вручную")
+    print(f"{args.model}: {'allowed' if field == 'allowed' else 'denied'} manually")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="offload", description=__doc__.splitlines()[0])
     parser.add_argument("--version", action="version", version=__version__)
-    parser.add_argument("--root", default=".", help="папка проекта (по умолчанию текущая)")
-    parser.add_argument("--json", action="store_true", help="машинный вывод")
+    parser.add_argument("--root", default=".", help="project folder (default: current)")
+    parser.add_argument("--json", action="store_true", help="machine-readable output")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("init", help="развернуть набор в проекте")
-    p.add_argument("--privacy", choices=list(policy.PRESETS),
-                   help="политика приватности, чтобы не спрашивать")
-    p.add_argument("--verify", help="команда проверки результата")
+    p = sub.add_parser("init", help="set the kit up in a project")
+    p.add_argument(
+        "--privacy", choices=list(policy.PRESETS), help="privacy policy, to skip the question"
+    )
+    p.add_argument("--verify", help="command that verifies a result")
     p.set_defaults(func=cmd_init)
 
-    p = sub.add_parser("models", help="модели и допустимы ли они по политике")
-    p.add_argument("--allowed", action="store_true", help="только допустимые")
-    p.add_argument("--refresh", action="store_true", help="не брать кэш")
+    p = sub.add_parser("models", help="models and whether the policy allows them")
+    p.add_argument("--allowed", action="store_true", help="acceptable ones only")
+    p.add_argument("--refresh", action="store_true", help="skip the cache")
     p.set_defaults(func=cmd_models)
 
-    p = sub.add_parser("pick", help="выбрать модель среди допустимых")
+    p = sub.add_parser("pick", help="choose a model among the acceptable ones")
     p.add_argument("--role", default="build", help="explore | plan | build | review")
     p.add_argument("--refresh", action="store_true")
-    p.add_argument("-v", "--verbose", action="store_true", help="показать основание выбора")
+    p.add_argument("-v", "--verbose", action="store_true", help="show the basis of the choice")
     p.set_defaults(func=cmd_pick)
 
-    p = sub.add_parser("discover", help="обновить список моделей и условия приватности")
+    p = sub.add_parser("discover", help="refresh the model list and privacy terms")
     p.set_defaults(func=cmd_discover)
 
     for name, field, other, text in (
-        ("allow", "allowed", "denied", "разрешить модель вручную"),
-        ("deny", "denied", "allowed", "запретить модель вручную"),
+        ("allow", "allowed", "denied", "allow a model manually"),
+        ("deny", "denied", "allowed", "deny a model manually"),
     ):
         p = sub.add_parser(name, help=text)
         p.add_argument("model")
@@ -121,8 +132,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Вывод всегда в UTF-8: оркестратор читает его как текст, а системная
-    # кодировка консоли Windows превращает кириллицу в нечитаемые знаки.
+    # Always UTF-8 output: the orchestrator reads it as text, and the Windows
+    # console code page turns non-ASCII into unreadable bytes.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
@@ -130,5 +141,5 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except (opencode.OpenCodeError, jsonio.ConfigError) as error:
-        print(f"ошибка: {error}", file=sys.stderr)
+        print(f"error: {error}", file=sys.stderr)
         return 1

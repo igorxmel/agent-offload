@@ -1,8 +1,8 @@
-"""Настройки проекта: `.offload/config.json`.
+"""Project settings: `.offload/config.json`.
 
-Хранятся указатели и параметры, но не названия моделей: выбор модели делается
-по свежим данным каждый раз, а в настройках может лежать только пожелание
-(«для проверки возьми такую-то»), которое действует, лишь пока модель допустима.
+Holds pointers and parameters but no model names: the model is chosen from fresh
+data every time, and settings can only carry a preference ("use that one for
+review") that applies only while the model is acceptable.
 """
 
 from __future__ import annotations
@@ -18,12 +18,12 @@ DEFAULT_TTL_HOURS = 24
 
 @dataclass
 class Config:
-    # Команда, которой проверяется результат. Пустая — проверять нечем, и
-    # делегировать нельзя: без машинной проверки это генератор мусора.
+    # Command that verifies the result. Empty means nothing to verify with, and
+    # delegating is not allowed: without a machine check this is a junk generator.
     verify: str = ""
     sources: list[str] = field(default_factory=lambda: list(DEFAULT_SOURCES))
     ttl_hours: int = DEFAULT_TTL_HOURS
-    # Пожелания по ролям: {"implement": "opencode/…"}. Только пожелания.
+    # Per-role preferences: {"build": "provider/model"}. Preferences only.
     prefer: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:

@@ -1,8 +1,8 @@
-"""agent-offload: передать объёмную работу бесплатным моделям OpenCode.
+"""agent-offload: hand bulk work to OpenCode's free models.
 
-Оркестратор (Claude, Codex, Antigravity — любой, кто умеет выполнить команду в
-консоли) ставит задачу, а исполнитель пишет код. Оркестратору остаётся
-короткий вердикт машинной проверки вместо двухсот строк кода.
+The orchestrator (Claude, Codex, Antigravity - anything that can run a shell
+command) sets the goal; the executor writes the code. What comes back to the
+orchestrator is a short verdict from a machine check, not two hundred lines.
 """
 
 __version__ = "0.1.0"

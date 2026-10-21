@@ -1,4 +1,4 @@
 # agent-offload
 
-**Правила проекта — в [AGENTS.md](AGENTS.md). Прочитайте его целиком перед правками.**
-Содержимое живёт в одном файле: две копии разойдутся молча.
+**Project rules are in [AGENTS.md](AGENTS.md). Read it in full before editing.**
+The content lives in one file: two copies would drift apart silently.
