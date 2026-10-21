@@ -2,7 +2,9 @@
 
 Every command supports `--json`: the orchestrator is a machine and has no use for
 a table meant for humans. Exit codes: 0 success, 1 usage or environment error,
-2 no acceptable models (a separate code so it can be handled).
+2 no acceptable models, 3 check failed or nothing changed, 4 every executor
+attempt failed, 5 the executor touched its own limits (separate codes so an
+orchestrator can handle each).
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from offload import __version__, discover, jsonio, opencode, policy, select
+from offload import __version__, delegate, discover, jsonio, opencode, policy, select
 from offload import init as init_mod
 
 EXIT_NO_MODELS = 2
@@ -82,6 +84,50 @@ def cmd_discover(args) -> int:
     return 0
 
 
+def _format_verdict(v) -> str:
+    lines = [f"{v.status.upper()}  model={v.model or '-'}  role={v.role}  {v.seconds:.0f}s"]
+    if v.branch:
+        lines.append(f"branch: {v.branch}  (base {v.base})")
+    if v.files:
+        lines.append(f"files: {', '.join(v.files[:12])}" + (" ..." if len(v.files) > 12 else ""))
+    if v.diffstat:
+        lines.append(f"diff: {v.diffstat}")
+    if v.verify:
+        outcome = "PASSED" if v.verify["exit_code"] == 0 and not v.verify["timed_out"] else "FAILED"
+        lines.append(f"check [{outcome}]: {v.verify['command']}")
+        lines.append(v.verify["tail"] or "(no output)")
+    for name in ("DONE", "NOT DONE", "BLOCKERS", "DECISIONS", "RAW"):
+        if v.report.get(name):
+            lines.append(f"{name}: {v.report[name]}")
+    for attempt in v.attempts:
+        if attempt.outcome != "ok":
+            lines.append(f"attempt {attempt.model}: {attempt.outcome} {attempt.detail}")
+    lines.extend(f"note: {note}" for note in v.notes)
+    if v.branch and v.status == "passed":
+        lines.append(f"merge: git merge {v.branch}   discard: git branch -D {v.branch}")
+    return "\n".join(lines)
+
+
+def cmd_delegate(args) -> int:
+    if bool(args.task) == bool(args.task_file):
+        print("error: give exactly one of --task or --task-file", file=sys.stderr)
+        return 1
+    text = args.task or Path(args.task_file).read_text(encoding="utf-8")
+    if not text.strip():
+        print("error: the task is empty", file=sys.stderr)
+        return 1
+    try:
+        verdict = delegate.delegate(
+            _root(args), text, role=args.role, model=args.model,
+            verify_cmd=args.verify, max_attempts=args.attempts,
+        )
+    except delegate.DelegateError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return error.code
+    _out(args, verdict.to_dict(), _format_verdict(verdict))
+    return verdict.exit_code
+
+
 def _edit_list(args, field: str, other: str) -> int:
     root = _root(args)
     pol = policy.load(root)
@@ -117,6 +163,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--refresh", action="store_true")
     p.add_argument("-v", "--verbose", action="store_true", help="show the basis of the choice")
     p.set_defaults(func=cmd_pick)
+
+    p = sub.add_parser("delegate", help="hand a task to an executor and get a verdict")
+    p.add_argument("--task", help="the task text")
+    p.add_argument("--task-file", help="file holding the task text")
+    p.add_argument("--role", default="build", help="explore | plan | build | review")
+    p.add_argument("--model", help="force a model (must be acceptable under the policy)")
+    p.add_argument("--verify", help="check command, overriding .offload/config.json")
+    p.add_argument("--attempts", type=int, default=3, help="models to try on infrastructure failure")
+    p.set_defaults(func=cmd_delegate)
 
     p = sub.add_parser("discover", help="refresh the model list and privacy terms")
     p.set_defaults(func=cmd_discover)

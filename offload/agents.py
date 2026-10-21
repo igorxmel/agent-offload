@@ -25,6 +25,24 @@ COMMON_DENY = [
     ("shell", "git push *"),
     ("shell", "git reset --hard *"),
     ("shell", "rm -rf *"),
+    # The executor must not rewrite its own cage: editing these would let it
+    # lift every deny above on the next run. The kit also verifies afterwards
+    # that they are unchanged, in case this rule is ever matched differently.
+    ("edit", ".offload/*"),
+    ("edit", ".opencode/*"),
+    ("edit", "opencode.json"),
+    ("edit", "opencode.jsonc"),
+    # Environment changes were observed in the trial: the executor ran
+    # `pip install` and altered the interpreter outside the project files.
+    # Dependencies are the orchestrator's job, not the executor's.
+    ("shell", "pip install *"),
+    ("shell", "pip3 install *"),
+    ("shell", "python -m pip *"),
+    ("shell", "python3 -m pip *"),
+    ("shell", "py -m pip *"),
+    ("shell", "npm install -g *"),
+    ("shell", "npm i -g *"),
+    ("shell", "npm install --global *"),
 ]
 
 ROLES: dict[str, dict] = {

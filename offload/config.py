@@ -23,6 +23,9 @@ class Config:
     verify: str = ""
     sources: list[str] = field(default_factory=lambda: list(DEFAULT_SOURCES))
     ttl_hours: int = DEFAULT_TTL_HOURS
+    # Seconds. A hung executor is killed, a hung check is reported as such.
+    executor_timeout: int = 900
+    verify_timeout: int = 600
     # Per-role preferences: {"build": "provider/model"}. Preferences only.
     prefer: dict[str, str] = field(default_factory=dict)
 
@@ -31,6 +34,8 @@ class Config:
             "verify": self.verify,
             "sources": self.sources,
             "ttl_hours": self.ttl_hours,
+            "executor_timeout": self.executor_timeout,
+            "verify_timeout": self.verify_timeout,
             "prefer": self.prefer,
         }
 
@@ -42,6 +47,8 @@ def load(root: Path) -> Config:
         verify=str(data.get("verify", base.verify)),
         sources=list(data.get("sources", base.sources)),
         ttl_hours=int(data.get("ttl_hours", base.ttl_hours)),
+        executor_timeout=int(data.get("executor_timeout", base.executor_timeout)),
+        verify_timeout=int(data.get("verify_timeout", base.verify_timeout)),
         prefer=dict(data.get("prefer", {})),
     )
 

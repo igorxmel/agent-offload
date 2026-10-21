@@ -53,7 +53,9 @@ VERIFIED holds command output, not "all works". An empty section is the word "no
 
 - fit code to the tests: if a test is wrong, say so in BLOCKERS;
 - change anything the task does not name;
-- leave the project folder, read secrets (`*.env`, keys), or `git push`.
+- leave the project folder, read secrets (`*.env`, keys), or `git push`;
+- install anything: a missing dependency goes in BLOCKERS, the orchestrator installs it;
+- edit `.offload/`, `.opencode/` or `opencode.json*`: those are the executor's own limits.
 
 ## What the orchestrator must do
 

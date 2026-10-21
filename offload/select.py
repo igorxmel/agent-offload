@@ -21,19 +21,28 @@ class Choice:
     basis: str  # prefer | history | guess
 
 
-def pick(root: Path, snapshot: Snapshot, role: str) -> Choice | None:
-    allowed = {entry.id for entry in snapshot.allowed()}
+def ranked(root: Path, snapshot: Snapshot, role: str) -> list[Choice]:
+    """Every acceptable model, best first. Delegation walks this list on failure."""
+    allowed = [entry.id for entry in snapshot.allowed()]
     if not allowed:
-        return None
+        return []
 
+    chosen: list[Choice] = []
     wanted = config.load(root).prefer.get(role)
     if wanted in allowed:
-        return Choice(wanted, "prefer")
+        chosen.append(Choice(wanted, "prefer"))
 
     measured = {m: s for m, s in history.stats(root, role).items() if m in allowed and s.runs}
-    if measured:
-        best = max(measured, key=lambda m: (measured[m].rate, measured[m].runs))
-        return Choice(best, "history")
+    for model in sorted(measured, key=lambda m: (measured[m].rate, measured[m].runs), reverse=True):
+        if model not in {c.model for c in chosen}:
+            chosen.append(Choice(model, "history"))
 
-    first = next(entry.id for entry in snapshot.entries if entry.id in allowed)
-    return Choice(first, "guess")
+    for model in allowed:
+        if model not in {c.model for c in chosen}:
+            chosen.append(Choice(model, "guess"))
+    return chosen
+
+
+def pick(root: Path, snapshot: Snapshot, role: str) -> Choice | None:
+    options = ranked(root, snapshot, role)
+    return options[0] if options else None
