@@ -4,9 +4,8 @@ Hand bulk work to [OpenCode](https://opencode.ai)'s free models, and leave your 
 agent - Claude, Codex, Antigravity, anything - only the goal, a short verdict and the
 check. Expensive tokens go to decisions, not to typing.
 
-> **Status: early.** `init`, acceptable-model discovery and selection are done.
-> `offload delegate` (run the executor, branch, machine check, compressed verdict)
-> is the next step.
+> **Status: early but working end to end.** `init`, acceptable-model discovery, selection
+> and `delegate` are done and have been run against real models.
 
 ## The easy way to use it
 
@@ -28,7 +27,26 @@ offload models [--allowed]         models, and whether the policy allows them
 offload pick --role build -v       choose a model
 offload allow|deny <model>         manual exception
 offload discover                   refresh data from the official pages
+offload delegate --task "..."      hand a task over, get a verdict
 ```
+
+`delegate` works on a scratch branch `offload/...` and never touches your tree. It picks an
+acceptable model, runs the executor, then **runs your check command itself** and returns a
+short verdict: model, changed files, diffstat and what the check actually printed. If a
+model fails for infrastructure reasons (timeout, provider error, empty answer) it tries the
+next acceptable one. A failed *check* is not retried: that is a quality verdict, and it
+goes to you. If the executor edits its own limits, all its work is discarded.
+
+| Exit | Meaning |
+|---|---|
+| 0 | check passed |
+| 2 | no acceptable model |
+| 3 | check failed, or nothing changed |
+| 4 | every executor attempt failed |
+| 5 | the executor touched its own limits |
+
+Roles: `build` (writes), and read-only `explore`, `plan`, `review` that return a summary,
+a plan or a review without a branch or a check.
 
 Every command has `--json` for machine parsing.
 
@@ -57,7 +75,8 @@ Without a human (an orchestrator ran `init` itself) `strict` is chosen. The core
 manually - otherwise a broken page parser would silently open access to everything.
 
 Agent profiles forbid the executor from leaving the project folder (OpenCode **allows**
-it by default), reading `*.env` and keys, and `git push`. The denies are explicit:
+it by default), reading `*.env` and keys, `git push`, installing packages, and editing its
+own limits (`.offload/`, `.opencode/`). The denies are explicit:
 without a human the `--auto` flag approves everything not denied outright.
 
 ## Install

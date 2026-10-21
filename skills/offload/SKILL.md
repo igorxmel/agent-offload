@@ -38,6 +38,28 @@ The model list and its terms are fetched from official pages at run time; none a
 the repository. A model with no privacy data is **denied**. Exit code 2 means no
 acceptable model: tell the human, do not work around the policy.
 
+## Delegating
+
+```
+offload delegate --task "<goal, files, definition of done>" [--role build] [--json]
+```
+
+Keep the task short; the executor reads the project itself. The tree must be clean
+(commit or stash first). Work happens on a branch `offload/...`; your branch is never touched.
+
+Read the verdict, then act on the exit code:
+
+- **0** - the check passed. Review the diff (`git diff <base>..<branch>`), then
+  `git merge <branch>` or `git branch -D <branch>`.
+- **3** - the check failed or nothing changed. Send the executor a numbered list of
+  discrepancies in a new task; do not explain basics.
+- **4** - every model failed for infrastructure reasons. Retry later or write it yourself.
+- **5** - the executor edited its own limits. Its work was discarded. Do not retry blindly.
+- **2** - no acceptable model. Tell the human.
+
+Install dependencies yourself before delegating: the executor is not allowed to.
+Read-only roles (`explore`, `plan`, `review`) return a summary and need no branch or check.
+
 ## Protocol
 
 Read `.offload/protocol.md`. In short: the task is goal, files, definition of done; the

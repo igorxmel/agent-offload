@@ -60,9 +60,17 @@ Facts, each observed rather than read in the docs. Re-verify after an OpenCode u
 - Free models fail in ways a delegating tool must survive: one returned
   `provider.quota` / HTTP 402 "Endpoint is unavailable" immediately.
 - The build agent followed the report format and reported honestly what it refused.
-- **Side effect to decide on:** the executor ran `python -m pip install pytest`, changing
-  the interpreter environment outside the project files. Shell is not sandboxed beyond the
-  denies. Consider denying `pip install *` / global installs, or require a project venv.
+- **Side effect, now closed:** the executor once ran `python -m pip install pytest`, changing
+  the interpreter outside the project files. `COMMON_DENY` now blocks pip and global npm
+  installs. Confirmed by a second trial: `pip install`, editing `.opencode/agents/*` and
+  writing `opencode.json` all came back `permission.rejected`, files intact. Shell is still
+  not sandboxed beyond the denies.
+- **The task travels as an attached file** (`--file`), with a fixed safe message. On Windows
+  `opencode` is an npm `.cmd` shim, so a free-form argument passes through `cmd.exe`, which
+  treats `&`, `|`, `%`, `^` as syntax even inside quotes.
+- End-to-end run of `delegate` against a real model: 20 s, branch created, check run by the
+  kit, original branch and tree untouched. Models write a bare `DONE` header without a colon;
+  the report parser accepts it.
 
 ## Language
 
@@ -86,10 +94,12 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- `offload delegate`: run the executor in **text mode** (`opencode run --auto --agent
-  offload-<role> --model ...`), a separate git branch, parse the report, **the kit runs the
-  machine check itself**, write to history, survive provider errors by trying the next
-  acceptable model.
-- Decide on the pip-install side effect above.
+- A held-out check: the executor sees the check command, so it can fit code to it. The
+  kit already runs the check itself; running a *second* command the executor never saw
+  (`verify_holdout`) would close the gap.
+- A way to continue a failed delegation with a numbered list of discrepancies.
+- Real-world run of the retry path: a provider error (`provider.quota`, HTTP 402) was seen
+  once in JSON mode; its shape in text mode is unknown, so today any non-zero exit, timeout
+  or empty answer counts as an infrastructure failure and moves to the next model.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
