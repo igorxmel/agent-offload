@@ -1,0 +1,28 @@
+[project]
+name = "agent-offload"
+version = "0.1.0"
+description = "Let any orchestrator agent delegate bulk work to OpenCode's free models, with privacy policy and machine-checked results"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+# Нарочно без зависимостей: набор ставят в чужие проекты, и тянуть туда
+# что-то ещё значило бы ломать чужое окружение.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+offload = "offload.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["offload*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
