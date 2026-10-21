@@ -37,9 +37,32 @@ Standard library only. The kit is installed into other people's projects.
 
 Without a human, `--auto` approves everything not denied outright. OpenCode **allows**
 `external_directory` by default, so denying it is mandatory in every role
-(`agents.COMMON_DENY`). The permission format comes from the OpenCode v2 docs; its
-runtime behaviour has not yet been confirmed by a trial run - do not treat it as
-established.
+(`agents.COMMON_DENY`). Confirmed by trial, see the next section.
+
+## Verified behaviour of `opencode run` (v2.0.32, trial on 2026-10-21)
+
+Facts, each observed rather than read in the docs. Re-verify after an OpenCode upgrade.
+
+- **Denies are enforced by the engine, not by the model's good will.** An agent with our
+  `COMMON_DENY` got `permission.rejected` for `read ../outside/secret.txt`
+  (`external_directory`), `read .env` and `git push` (`shell`); no secret leaked.
+- **Without our denies the leak is real.** The built-in `build` agent with `--auto` read a
+  file outside the project and printed it. The mandatory denies are not superstition.
+- **Do not trust a refusal as evidence.** The first trial looked safe because the model
+  declined, citing `.offload/protocol.md`. That was the model complying, not the permission
+  system. Test enforcement with an agent whose prompt has no such rules.
+- **`--format json` hangs when the agent uses file tools.** Plain prompts work in JSON
+  mode; reading a file does not return (killed by timeout, zero bytes of output).
+  Plain text output with `--auto` works. `delegate` must use text output and parse the
+  fixed report format (`DONE/VERIFIED/...`) itself.
+- `--standalone` is **not** required: text mode works without it in about 7 seconds. It is
+  only a way to keep the run off the shared background service.
+- Free models fail in ways a delegating tool must survive: one returned
+  `provider.quota` / HTTP 402 "Endpoint is unavailable" immediately.
+- The build agent followed the report format and reported honestly what it refused.
+- **Side effect to decide on:** the executor ran `python -m pip install pytest`, changing
+  the interpreter environment outside the project files. Shell is not sandboxed beyond the
+  denies. Consider denying `pip install *` / global installs, or require a project venv.
 
 ## Language
 
@@ -63,9 +86,10 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- `offload delegate`: run the executor (`opencode run --agent offload-<role> --model ...
-  --format json`), a separate branch, collect the report, **the kit runs the machine
-  check itself**, write to history. First a trial run: how `run` behaves on `ask` without
-  `--auto`, and whether `*` works as an action in rules.
+- `offload delegate`: run the executor in **text mode** (`opencode run --auto --agent
+  offload-<role> --model ...`), a separate git branch, parse the report, **the kit runs the
+  machine check itself**, write to history, survive provider errors by trying the next
+  acceptable model.
+- Decide on the pip-install side effect above.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
