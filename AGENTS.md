@@ -95,6 +95,29 @@ and a second run on the built binary agreed. What the run taught:
 - The free-model list churns: two acceptable models from the earlier trial were gone a
   few days later. Never rely on a model name seen once.
 
+### Same task, second model (DeepSeek V4.1 Flash, free)
+
+Rerun from a clean state with the same task, `--scope`, and the linker environment set
+through variables outside the repository (nothing to improvise around):
+
+| | beam-free | deepseek-v4.1-flash-free |
+|---|---|---|
+| wall time | 830 s | 367 s |
+| agent steps | 154 | 39 |
+| failed tool calls | 3 | 1 |
+| fresh input / output / reasoning tokens | 320k / 28k / 21k | 87k / 15k / 26k |
+| files committed | 27 (hacks, junk) | 4, all legitimate |
+| own tests | 15 | 21 |
+| check | 156/156 | 156/156 |
+
+One run per model, one task: indicative, not a benchmark. What held up across both runs is
+the method: an out-of-repo check against the live reference, a review of the file list,
+and an environment prepared by the orchestrator. Most of beam-free's mess came from
+improvising around a missing Windows SDK; once the linker was configured through
+`CARGO_TARGET_*_LINKER` / `CARGO_ENCODED_RUSTFLAGS` there was nothing left to improvise.
+The kit's history is per project, so these runs live in the experiment clone, not here.
+
+## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is
 English. The kit is used through an agent, which answers the user in their language.
