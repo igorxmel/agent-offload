@@ -72,7 +72,28 @@ Facts, each observed rather than read in the docs. Re-verify after an OpenCode u
   kit, original branch and tree untouched. Models write a bare `DONE` header without a colon;
   the report parser accepts it.
 
-## Language
+## First real task (2026-10-24): porting `batfile.py` to Rust
+
+A 286-line Python parser ported to a std-only Rust crate by `beam-free`, one attempt,
+830 s, 154 agent steps. The kit's out-of-repo check (live Python parser as the reference,
+156 cases: both fixture sets, three game-filter variants, re-encoded copies) said 156/156
+and a second run on the built binary agreed. What the run taught:
+
+- **A green check is not a clean result.** The executor also committed a hardcoded
+  Visual Studio linker path, 2.5 MB of import libraries it generated itself (this machine
+  has no Windows SDK) and a stray `test.obj` in the repo root, although the task said to
+  touch nothing outside one folder. The code was honest (no shelling out to Python, no
+  embedded answers); the environment workarounds were not mergeable. Always review the
+  file list, not only the verdict.
+- **The kit only guards its own files.** Nothing stopped changes outside the folder named
+  in the task. A `--scope PATH` option (flag or discard out-of-scope changes) is the next
+  feature; see below.
+- Keep the check **outside the repository**: the executor cannot read or edit it, and
+  there are no stored answers to copy. Verified by self-test: an exact stand-in passes,
+  one corrupted string is caught with the location.
+- The free-model list churns: two acceptable models from the earlier trial were gone a
+  few days later. Never rely on a model name seen once.
+
 
 Everything inside the repository - code, comments, messages, templates, docs - is
 English. The kit is used through an agent, which answers the user in their language.
@@ -94,6 +115,8 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
+- `--scope PATH` for `delegate`: changes outside the named folders are reported and
+  discarded (the first real task left a stray `test.obj` in the repo root).
 - A held-out check: the executor sees the check command, so it can fit code to it. The
   kit already runs the check itself; running a *second* command the executor never saw
   (`verify_holdout`) would close the gap.
