@@ -175,11 +175,13 @@ Verified against a live OpenCode v2.0.32 and on one real task (see above).
   keep this repository focused on the kit.
 - Privacy policy is the owner's call per project; never loosen it on your own.
 
-**Machine-local artifacts of the experiment (not in this repository, safe to delete):**
-`D:/Code/zx-offload-check` (the out-of-repo check `compare.py`, task files, `rustenv.sh`
-with the linker environment, generated import libraries, verdicts) and
-`D:/Code/zx-rust-experiment` (a clone with branches `offload/...` and `rust-batfile-clean`).
-Nothing from them was pushed anywhere. The lessons are recorded in this file.
+**The experiment is archived, not in the repository:**
+`.experiments/rust-batfile-experiment.zip` (gitignored, 25 KB): both Rust ports
+(`deepseek/`, `beam-clean/`), the out-of-repo check `compare.py`, the task texts, the
+linker environment `rustenv.sh` and both verdicts under `method/`, with a README inside.
+The working folders `D:/Code/zx-offload-check` and `D:/Code/zx-rust-experiment` it came
+from are not needed any more. Nothing from them was ever pushed. The lessons are recorded
+in this file.
 
 **Suggested next steps, none started:** `verify_holdout`; continuing a failed delegation
 with a list of discrepancies; hints for orchestrators other than Claude; per-user rather
