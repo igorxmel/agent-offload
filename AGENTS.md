@@ -148,3 +148,43 @@ docs, build, test, chore. Do not add yourself as a co-author.
   or empty answer counts as an infrastructure failure and moves to the next model.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
+- The privacy table has no row for most `-free` variants (e.g. `deepseek-v4.1-flash-free`),
+  so they are denied under every preset until allowed by hand. Decide whether a `-free`
+  model may inherit the row of its paid sibling (the table's own footnotes suggest the
+  terms can differ, so the current default is conservative on purpose).
+- `offload init` on Windows with stdin closed prints the privacy question before falling
+  back to `strict` (a null device reports as a terminal there). The result is right, the
+  noise is not.
+
+## Handoff (state on 2026-10-24)
+
+Written so a fresh session can continue without the conversation that produced this.
+
+**What exists and works:** `init`, `models`, `pick`, `allow`, `deny`, `discover`,
+`delegate` (with `--scope`). 44 tests, ruff clean. Public repo, MIT, English only.
+Verified against a live OpenCode v2.0.32 and on one real task (see above).
+
+**Decisions already taken by the owner - do not reopen without asking:**
+- The kit is orchestrator-agnostic: any agent that can run a shell command can drive it.
+  OpenCode is the executor; free models only.
+- The owner trusts DeepSeek V4.1 Flash for coding more than beam-free, and the single
+  comparison agrees (see the table). Put it first through `prefer`/`--model`, after
+  allowing it manually.
+- The Rust port of the owner's main project (ZapretXmel) is **not** being pursued now.
+  `batfile.py` was ported only as an experiment to measure the method. The owner asked to
+  keep this repository focused on the kit.
+- Privacy policy is the owner's call per project; never loosen it on your own.
+
+**Machine-local artifacts of the experiment (not in this repository, safe to delete):**
+`D:/Code/zx-offload-check` (the out-of-repo check `compare.py`, task files, `rustenv.sh`
+with the linker environment, generated import libraries, verdicts) and
+`D:/Code/zx-rust-experiment` (a clone with branches `offload/...` and `rust-batfile-clean`).
+Nothing from them was pushed anywhere. The lessons are recorded in this file.
+
+**Suggested next steps, none started:** `verify_holdout`; continuing a failed delegation
+with a list of discrepancies; hints for orchestrators other than Claude; per-user rather
+than per-project model history (today a model's record starts from zero in every project).
+
+**Working here:** run `python -m pytest tests -q` first. Edit files with the editor tool
+rather than shell heredocs: `\n` inside a heredoc silently becomes a real newline and
+broke three edits during the first session.
