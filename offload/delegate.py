@@ -102,6 +102,16 @@ def _relevant(paths_: list[str]) -> list[str]:
     return [p for p in paths_ if not p.startswith(IGNORED_PREFIXES)]
 
 
+def _in_scope(path: str, scope: list[str]) -> bool:
+    """True when `path` is one of the scope entries or lives under one of them."""
+    path = path.replace("\\", "/")
+    for entry in scope:
+        entry = entry.replace("\\", "/").strip("/")
+        if path == entry or path.startswith(entry + "/"):
+            return True
+    return False
+
+
 def _tampered(files: list[str]) -> list[str]:
     return [f for f in files if f.startswith(PROTECTED_PREFIXES) or f in PROTECTED_FILES]
 
@@ -149,6 +159,7 @@ def delegate(
     model: str | None = None,
     verify_cmd: str | None = None,
     max_attempts: int = 3,
+    scope: list[str] | None = None,
     snapshot=None,
     executor=opencode.run_agent,
     now=time.time,
@@ -231,6 +242,18 @@ def delegate(
                     f"a read-only role changed files: {files}. Left as is - inspect git status"
                 )
             return verdict
+
+        limit = scope if scope is not None else cfg.scope
+        if limit:
+            # After the tamper check on purpose: the kit's own files are outside any
+            # scope, and discarding them here would hide an attempt to edit them.
+            stray = [f for f in files if not _in_scope(f, limit)]
+            if stray:
+                gitops.discard_paths(root, stray)
+                files = [f for f in files if f not in stray]
+                verdict.files = files
+                shown = ", ".join(stray[:6]) + (" ..." if len(stray) > 6 else "")
+                verdict.notes.append(f"out of scope, discarded ({len(stray)}): {shown}")
 
         if not files:
             verdict.status = "no_changes"

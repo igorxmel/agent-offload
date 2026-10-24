@@ -262,3 +262,83 @@ def test_report_parser_accepts_a_bare_header_without_a_colon() -> None:
     assert report.is_well_formed(parsed)
     # A header word inside a sentence is not a header.
     assert report.parse("We are DONE with this and VERIFIED nothing.") == {}
+
+
+# --- scope ---------------------------------------------------------------
+
+
+def test_scope_discards_stray_files_but_keeps_the_work(tmp_path) -> None:
+    """The first real run left a stray test.obj in the repo root; a green check said nothing."""
+    root = make_repo(tmp_path)
+    verdict = delegate.delegate(
+        root,
+        "x",
+        scope=["work"],
+        snapshot=snapshot("p/m1"),
+        executor=writer(
+            {"work/new.txt": "x\n", "test.obj": "junk", "base.txt": "edited outside scope\n"}
+        ),
+        verify_cmd="git ls-files --error-unmatch work/new.txt",
+    )
+    assert verdict.status == "passed"
+    assert verdict.files == ["work/new.txt"]
+    assert any("out of scope" in n and "test.obj" in n for n in verdict.notes)
+
+    tracked = gitops.git(root, "ls-tree", "-r", "--name-only", verdict.branch).split()
+    assert "test.obj" not in tracked
+    assert gitops.git(root, "show", f"{verdict.branch}:base.txt") == "base\n"  # restored
+
+
+def test_scope_does_not_hide_an_attempt_to_edit_the_kits_own_files(tmp_path) -> None:
+    """The kit's files are outside any scope; discarding them would mask the tampering."""
+    root = make_repo(tmp_path)
+    verdict = delegate.delegate(
+        root, "x", scope=["work"], snapshot=snapshot("p/m1"),
+        executor=writer({".opencode/agents/offload-build.md": "permissions: []\n", "work/a": "1"}),
+        verify_cmd="git ls-files --error-unmatch work/a",
+    )
+    assert verdict.status == "tampered"
+
+
+def test_everything_out_of_scope_means_no_changes(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    verdict = delegate.delegate(
+        root, "x", scope=["work"], snapshot=snapshot("p/m1"),
+        executor=writer({"elsewhere.txt": "x"}),
+    )
+    assert verdict.status == "no_changes"
+    assert not (root / "elsewhere.txt").exists()
+
+
+def test_scope_from_config_applies_and_empty_scope_means_no_limit(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    cfg = config.load(root)
+    cfg.scope = ["work"]
+    config.save(root, cfg)
+    gitops.git(root, "add", "-A")
+    gitops.git(root, "commit", "-q", "-m", "scope")
+
+    limited = delegate.delegate(
+        root, "x", snapshot=snapshot("p/m1"), executor=writer({"work/a": "1", "b": "2"}),
+        verify_cmd="git ls-files --error-unmatch work/a",
+    )
+    assert limited.files == ["work/a"]
+
+    # An explicit empty list on the call is "use the config"; no scope at all is no limit.
+    cfg.scope = []
+    config.save(root, cfg)
+    gitops.git(root, "add", "-A")
+    gitops.git(root, "commit", "-q", "-m", "no scope")
+    free = delegate.delegate(
+        root, "y", snapshot=snapshot("p/m1"), executor=writer({"c": "3", "d": "4"}),
+        verify_cmd="git ls-files --error-unmatch c",
+    )
+    assert sorted(free.files) == ["c", "d"]
+
+
+def test_discard_never_reaches_outside_the_project(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    outside = tmp_path.parent / "keep-me.txt"
+    outside.write_text("precious", encoding="utf-8")
+    gitops.discard_paths(root, ["../keep-me.txt"])
+    assert outside.read_text(encoding="utf-8") == "precious"

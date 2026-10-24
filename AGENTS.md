@@ -86,8 +86,9 @@ and a second run on the built binary agreed. What the run taught:
   embedded answers); the environment workarounds were not mergeable. Always review the
   file list, not only the verdict.
 - **The kit only guards its own files.** Nothing stopped changes outside the folder named
-  in the task. A `--scope PATH` option (flag or discard out-of-scope changes) is the next
-  feature; see below.
+  in the task. `--scope PATH` now discards and reports out-of-scope changes. It runs
+  after the tamper check on purpose, so discarding the kit's own files cannot hide an
+  attempt to edit them.
 - Keep the check **outside the repository**: the executor cannot read or edit it, and
   there are no stored answers to copy. Verified by self-test: an exact stand-in passes,
   one corrupted string is caught with the location.
@@ -115,8 +116,6 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- `--scope PATH` for `delegate`: changes outside the named folders are reported and
-  discarded (the first real task left a stray `test.obj` in the repo root).
 - A held-out check: the executor sees the check command, so it can fit code to it. The
   kit already runs the check itself; running a *second* command the executor never saw
   (`verify_holdout`) would close the gap.

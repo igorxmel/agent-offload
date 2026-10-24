@@ -120,6 +120,7 @@ def cmd_delegate(args) -> int:
         verdict = delegate.delegate(
             _root(args), text, role=args.role, model=args.model,
             verify_cmd=args.verify, max_attempts=args.attempts,
+            scope=args.scope or None,
         )
     except delegate.DelegateError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -171,6 +172,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", help="force a model (must be acceptable under the policy)")
     p.add_argument("--verify", help="check command, overriding .offload/config.json")
     p.add_argument("--attempts", type=int, default=3, help="models to try on infrastructure failure")
+    p.add_argument("--scope", action="append", metavar="PATH",
+                   help="folder the executor may change (repeatable); the rest is discarded")
     p.set_defaults(func=cmd_delegate)
 
     p = sub.add_parser("discover", help="refresh the model list and privacy terms")

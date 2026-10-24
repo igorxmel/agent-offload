@@ -26,6 +26,10 @@ class Config:
     # Seconds. A hung executor is killed, a hung check is reported as such.
     executor_timeout: int = 900
     verify_timeout: int = 600
+    # Folders the executor may change, relative to the project root. Empty means no
+    # limit. Anything outside is discarded: a green check says nothing about files
+    # the task never named.
+    scope: list[str] = field(default_factory=list)
     # Per-role preferences: {"build": "provider/model"}. Preferences only.
     prefer: dict[str, str] = field(default_factory=dict)
 
@@ -36,6 +40,7 @@ class Config:
             "ttl_hours": self.ttl_hours,
             "executor_timeout": self.executor_timeout,
             "verify_timeout": self.verify_timeout,
+            "scope": self.scope,
             "prefer": self.prefer,
         }
 
@@ -49,6 +54,7 @@ def load(root: Path) -> Config:
         ttl_hours=int(data.get("ttl_hours", base.ttl_hours)),
         executor_timeout=int(data.get("executor_timeout", base.executor_timeout)),
         verify_timeout=int(data.get("verify_timeout", base.verify_timeout)),
+        scope=list(data.get("scope", [])),
         prefer=dict(data.get("prefer", {})),
     )
 

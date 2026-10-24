@@ -44,7 +44,8 @@ acceptable model: tell the human, do not work around the policy.
 offload delegate --task "<goal, files, definition of done>" [--role build] [--json]
 ```
 
-Keep the task short; the executor reads the project itself. The tree must be clean
+Keep the task short; the executor reads the project itself. Pass `--scope <folder>` for a
+task that belongs in one place: stray files elsewhere are discarded and reported. The tree must be clean
 (commit or stash first). Work happens on a branch `offload/...`; your branch is never touched.
 
 Read the verdict, then act on the exit code:

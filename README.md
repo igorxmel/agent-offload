@@ -35,7 +35,10 @@ acceptable model, runs the executor, then **runs your check command itself** and
 short verdict: model, changed files, diffstat and what the check actually printed. If a
 model fails for infrastructure reasons (timeout, provider error, empty answer) it tries the
 next acceptable one. A failed *check* is not retried: that is a quality verdict, and it
-goes to you. If the executor edits its own limits, all its work is discarded.
+goes to you. If the executor edits its own limits, all its work is discarded. With
+`--scope PATH` (repeatable, or `scope` in `.offload/config.json`) anything the executor
+changed outside those folders is discarded and reported: a green check says nothing about
+files the task never named.
 
 | Exit | Meaning |
 |---|---|

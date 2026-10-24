@@ -100,3 +100,34 @@ def commit_all(root: Path, message: str) -> bool:
 
 def shortstat(root: Path, base: str, ref: str) -> str:
     return git(root, "diff", "--shortstat", base, ref, check=False).strip()
+
+
+def discard_paths(root: Path, relative: list[str]) -> list[str]:
+    """Reverts or deletes the named paths only. Returns what was actually discarded.
+
+    Used for out-of-scope changes. Tracked files are restored from HEAD, untracked
+    ones are deleted. A path that resolves outside the project is skipped: this
+    function must never be a way to delete things elsewhere.
+    """
+    import shutil
+
+    base = root.resolve()
+    done: list[str] = []
+    for rel in relative:
+        target = (root / rel).resolve()
+        if base not in target.parents:
+            continue
+        try:
+            git(root, "ls-files", "--error-unmatch", "--", rel)
+            tracked = True
+        except GitError:
+            tracked = False
+
+        if tracked:
+            git(root, "checkout", "-q", "HEAD", "--", rel)
+        elif target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+        elif target.exists():
+            target.unlink()
+        done.append(rel)
+    return done
