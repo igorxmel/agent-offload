@@ -45,7 +45,9 @@ offload delegate --task "<goal, files, definition of done>" [--role build] [--js
 ```
 
 Keep the task short; the executor reads the project itself. Pass `--scope <folder>` for a
-task that belongs in one place: stray files elsewhere are discarded and reported. The tree must be clean
+task that belongs in one place: stray files elsewhere are discarded and reported. Pass
+`--holdout "<cmd>"` with a check the executor must not know about (kept outside the repo);
+never show its output to the executor. The tree must be clean
 (commit or stash first). Work happens on a branch `offload/...`; your branch is never touched.
 
 Read the verdict, then act on the exit code:

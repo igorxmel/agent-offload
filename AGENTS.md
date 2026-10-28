@@ -139,9 +139,6 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- A held-out check: the executor sees the check command, so it can fit code to it. The
-  kit already runs the check itself; running a *second* command the executor never saw
-  (`verify_holdout`) would close the gap.
 - A way to continue a failed delegation with a numbered list of discrepancies.
 - Real-world run of the retry path: a provider error (`provider.quota`, HTTP 402) was seen
   once in JSON mode; its shape in text mode is unknown, so today any non-zero exit, timeout
@@ -161,7 +158,7 @@ docs, build, test, chore. Do not add yourself as a co-author.
 Written so a fresh session can continue without the conversation that produced this.
 
 **What exists and works:** `init`, `models`, `pick`, `allow`, `deny`, `discover`,
-`delegate` (with `--scope`). 44 tests, ruff clean. Public repo, MIT, English only.
+`delegate` (with `--scope` and `--holdout`). 48 tests. Public repo, MIT, English only.
 Verified against a live OpenCode v2.0.32 and on one real task (see above).
 
 **Decisions already taken by the owner - do not reopen without asking:**
@@ -183,7 +180,11 @@ The working folders `D:/Code/zx-offload-check` and `D:/Code/zx-rust-experiment` 
 from are not needed any more. Nothing from them was ever pushed. The lessons are recorded
 in this file.
 
-**Suggested next steps, none started:** `verify_holdout`; continuing a failed delegation
+**Held-out check (`--holdout CMD`, done):** CLI flag only, never in config or the task file,
+because the executor can read the repository. Runs only after the visible check is green;
+a failure makes the verdict `failed`. Not yet tried against a real model.
+
+**Suggested next steps, none started:** continuing a failed delegation
 with a list of discrepancies; hints for orchestrators other than Claude; per-user rather
 than per-project model history (today a model's record starts from zero in every project).
 

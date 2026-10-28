@@ -96,6 +96,11 @@ def _format_verdict(v) -> str:
         outcome = "PASSED" if v.verify["exit_code"] == 0 and not v.verify["timed_out"] else "FAILED"
         lines.append(f"check [{outcome}]: {v.verify['command']}")
         lines.append(v.verify["tail"] or "(no output)")
+    if v.holdout:
+        held = "PASSED" if v.holdout["exit_code"] == 0 and not v.holdout["timed_out"] else "FAILED"
+        lines.append(f"held-out check [{held}]")
+        if held == "FAILED":
+            lines.append(v.holdout["tail"] or "(no output)")
     for name in ("DONE", "NOT DONE", "BLOCKERS", "DECISIONS", "RAW"):
         if v.report.get(name):
             lines.append(f"{name}: {v.report[name]}")
@@ -120,7 +125,7 @@ def cmd_delegate(args) -> int:
         verdict = delegate.delegate(
             _root(args), text, role=args.role, model=args.model,
             verify_cmd=args.verify, max_attempts=args.attempts,
-            scope=args.scope or None,
+            scope=args.scope or None, holdout_cmd=args.holdout,
         )
     except delegate.DelegateError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -174,6 +179,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--attempts", type=int, default=3, help="models to try on infrastructure failure")
     p.add_argument("--scope", action="append", metavar="PATH",
                    help="folder the executor may change (repeatable); the rest is discarded")
+    p.add_argument("--holdout", metavar="CMD",
+                   help="second check the executor never sees; run after --verify passes. "
+                        "Flag only: a config file is readable by the executor")
     p.set_defaults(func=cmd_delegate)
 
     p = sub.add_parser("discover", help="refresh the model list and privacy terms")

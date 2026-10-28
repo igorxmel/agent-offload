@@ -38,7 +38,9 @@ next acceptable one. A failed *check* is not retried: that is a quality verdict,
 goes to you. If the executor edits its own limits, all its work is discarded. With
 `--scope PATH` (repeatable, or `scope` in `.offload/config.json`) anything the executor
 changed outside those folders is discarded and reported: a green check says nothing about
-files the task never named.
+files the task never named. With `--holdout CMD` the kit runs a second check the executor
+never saw (after the visible one passes); if it fails, the verdict is `failed`. Pass it on
+the command line only: a config file would be readable by the executor.
 
 | Exit | Meaning |
 |---|---|

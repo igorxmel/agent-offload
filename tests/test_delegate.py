@@ -342,3 +342,51 @@ def test_discard_never_reaches_outside_the_project(tmp_path) -> None:
     outside.write_text("precious", encoding="utf-8")
     gitops.discard_paths(root, ["../keep-me.txt"])
     assert outside.read_text(encoding="utf-8") == "precious"
+
+
+def test_holdout_failure_turns_a_green_check_into_failed(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    verdict = delegate.delegate(
+        root, "create new.txt", snapshot=snapshot("p/m1"), executor=writer({"new.txt": "x\n"}),
+        holdout_cmd="git ls-files --error-unmatch other.txt",
+    )
+    assert verdict.verify["exit_code"] == 0
+    assert verdict.status == "failed" and verdict.exit_code == 3
+    assert verdict.holdout["exit_code"] != 0
+    assert history.stats(root)["p/m1"].passed == 0
+
+
+def test_holdout_passing_keeps_the_verdict_passed(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    verdict = delegate.delegate(
+        root, "create new.txt", snapshot=snapshot("p/m1"), executor=writer({"new.txt": "x\n"}),
+        holdout_cmd="git ls-files --error-unmatch new.txt",
+    )
+    assert verdict.status == "passed" and verdict.holdout["exit_code"] == 0
+
+
+def test_holdout_is_not_run_when_the_visible_check_already_failed(tmp_path) -> None:
+    root = make_repo(tmp_path, verify="git ls-files --error-unmatch missing.txt")
+    verdict = delegate.delegate(
+        root, "do it", snapshot=snapshot("p/m1"), executor=writer({"new.txt": "x\n"}),
+        holdout_cmd="git ls-files --error-unmatch new.txt",
+    )
+    assert verdict.status == "failed" and verdict.holdout is None
+
+
+def test_holdout_command_never_reaches_the_executor_or_the_disk(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    secret = "git ls-files --error-unmatch SECRET-HOLDOUT-MARKER"
+    seen: list[str] = []
+
+    def spy(root_, agent, model, message, task_file, timeout):
+        seen.append(message + (Path(root_) / task_file).read_text(encoding="utf-8"))
+        (Path(root_) / "new.txt").write_text("x\n", encoding="utf-8")
+        return result()
+
+    delegate.delegate(root, "create new.txt", snapshot=snapshot("p/m1"), executor=spy,
+                      holdout_cmd=secret)
+    assert seen and "SECRET-HOLDOUT-MARKER" not in seen[0]
+    for path in root.rglob("*"):
+        if path.is_file() and ".git" not in path.parts:
+            assert "SECRET-HOLDOUT-MARKER" not in path.read_text(encoding="utf-8", errors="ignore")

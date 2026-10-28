@@ -66,6 +66,7 @@ class Verdict:
     files: list[str] = field(default_factory=list)
     diffstat: str = ""
     verify: dict | None = None
+    holdout: dict | None = None
     report: dict = field(default_factory=dict)
     report_ok: bool = False
     notes: list[str] = field(default_factory=list)
@@ -85,6 +86,7 @@ class Verdict:
             "files": self.files,
             "diffstat": self.diffstat,
             "verify": self.verify,
+            "holdout": self.holdout,
             "report": self.report,
             "report_well_formed": self.report_ok,
             "attempts": [vars(a) for a in self.attempts],
@@ -160,6 +162,7 @@ def delegate(
     verify_cmd: str | None = None,
     max_attempts: int = 3,
     scope: list[str] | None = None,
+    holdout_cmd: str | None = None,
     snapshot=None,
     executor=opencode.run_agent,
     now=time.time,
@@ -266,6 +269,18 @@ def delegate(
         outcome = checks.run(root, verify, cfg.verify_timeout)
         verdict.verify = outcome.to_dict()
         verdict.status = "passed" if outcome.passed else "failed"
+
+        if holdout_cmd and outcome.passed:
+            # Never written to the task file or to disk: the executor must not be able
+            # to read it. Run only on a green check; a red one already decides the verdict.
+            held = checks.run(root, holdout_cmd, cfg.verify_timeout)
+            verdict.holdout = held.to_dict()
+            if not held.passed:
+                verdict.status = "failed"
+                verdict.notes.append(
+                    "check passed but the held-out check failed: the code may be fitted to "
+                    "the visible check. Do not show the held-out output to the executor"
+                )
         return verdict
     finally:
         if writes:
