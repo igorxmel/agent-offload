@@ -117,6 +117,20 @@ improvising around a missing Windows SDK; once the linker was configured through
 `CARGO_TARGET_*_LINKER` / `CARGO_ENCODED_RUSTFLAGS` there was nothing left to improvise.
 The kit's history is per project, so these runs live in the experiment clone, not here.
 
+### todo-sync experiment (2026-10-29)
+
+A Rust + Kotlin/JVM to-do core with LAN sync, in `.experiments/todo-sync` (its own git
+repository, ignored here). The orchestrator wrote the protocol, the visible vectors and 33
+hidden ones (outside the repo, self-tested against wrong merges) before delegating.
+`deepseek-v4.1-flash-free` did each core in one attempt (Rust 256 s, Kotlin 155 s), both
+passed the hidden set, files stayed in scope. What it taught:
+
+- **On Windows the check runs through `cmd.exe` from Python, and a bare `gradlew.bat` in
+  the current folder is not found.** Write `.\gradlew.bat`. The Kotlin run was reported
+  `failed` for this reason alone; the executor itself had used `.\gradlew.bat`.
+- The environment is the orchestrator's job, as before: the Rust GNU toolchain (no Visual
+  Studio needed) and a Gradle skeleton prepared up front left nothing to improvise.
+
 ## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is
