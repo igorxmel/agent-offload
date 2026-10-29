@@ -185,6 +185,16 @@ docs, build, test, chore. Do not add yourself as a co-author.
   should recognise "Free usage limit reached", stop, and report it as its own status
   rather than `executor_error`. Nine finished delegations (~60 min of executor time,
   2026-10-29/30) fit into the free quota before it ran out mid-way through the tenth.
+- **Groq's free tier cannot drive an agent** (tried 2026-10-30). Both models answered a
+  one-file probe through OpenCode, but on a real task `qwen/qwen3.8-27b` was refused at the
+  first request: 8562 input tokens against a 7000 tokens-per-minute limit. OpenCode's
+  system prompt and tool definitions alone come close to that, and the context only grows.
+  `openai/gpt-oss-120b` got further but called a tool `exec` that does not exist (from its
+  own training harness) and Groq rejected the call. For an agent the limit that matters is
+  **tokens per minute per request**, not requests per day; check it before adding a provider.
+- A model passed with `--model` that is missing from the cached snapshot (a provider added
+  after the last `discover`) is refused as "unknown model". The kit should refresh once
+  before refusing.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
 - The privacy table has no row for most `-free` variants (e.g. `deepseek-v4.1-flash-free`),
