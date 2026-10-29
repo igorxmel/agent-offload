@@ -182,7 +182,10 @@ in this file.
 
 **Held-out check (`--holdout CMD`, done):** CLI flag only, never in config or the task file,
 because the executor can read the repository. Runs only after the visible check is green;
-a failure makes the verdict `failed`. Not yet tried against a real model.
+a failure makes the verdict `failed`. Tried on 2026-10-29 against `deepseek-v4.1-flash-free`
+on a throwaway repo (19 s): visible and held-out checks both passed, and the held-out test
+path appeared nowhere in the executor's tree. Gotcha: pass the holdout path in the form the
+check shell understands (a Git Bash `/tmp/...` path is not visible to Windows Python).
 
 **Suggested next steps, none started:** continuing a failed delegation
 with a list of discrepancies; hints for orchestrators other than Claude; per-user rather
