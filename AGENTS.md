@@ -185,7 +185,8 @@ check shell understands (a Git Bash `/tmp/...` path is not visible to Windows Py
 
 **Resume (`--resume BRANCH`, done):** `--task` holds the numbered discrepancies; the work goes on a
 new `offload/...` branch cut from the earlier one, which is never touched. Only `offload/` branches
-and writing roles are accepted. Tested with a fake executor, not yet with a real model. The Windows
+and writing roles are accepted. Tried on 2026-10-29 with `deepseek-v4.1-flash-free`: a held-out failure, then a resume with one
+discrepancy produced a one-line diff on a new branch (30 s), the earlier branch stayed intact. The Windows
 `init` noise (null device reported as a terminal) is fixed by asking the console API.
 
 **Suggested next steps, none started:** hints for orchestrators other than Claude; per-user rather
