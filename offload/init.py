@@ -14,6 +14,7 @@ The properties it is written for:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -112,6 +113,23 @@ def ensure_gitignore(root: Path) -> str:
     return f"added {line} to .gitignore"
 
 
+def stdin_is_terminal() -> bool:
+    """A real terminal on stdin. On Windows `isatty()` is also true for the null
+    device, so the console mode is asked for as well."""
+    try:
+        if not sys.stdin.isatty():
+            return False
+        if os.name != "nt":
+            return True
+        import ctypes
+        import msvcrt
+
+        handle = msvcrt.get_osfhandle(sys.stdin.fileno())
+        return bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(ctypes.c_uint32())))
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 def init(
     root: Path,
     privacy: str | None = None,
@@ -121,7 +139,7 @@ def init(
     """Sets the kit up. Returns report lines for the person."""
     report: list[str] = []
     if interactive is None:
-        interactive = sys.stdin.isatty()
+        interactive = stdin_is_terminal()
 
     # Privacy: a flag beats the question, and with neither the strictest wins.
     first_time = not paths.policy_file(root).exists()
