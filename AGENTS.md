@@ -139,7 +139,6 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- A way to continue a failed delegation with a numbered list of discrepancies.
 - Real-world run of the retry path: a provider error (`provider.quota`, HTTP 402) was seen
   once in JSON mode; its shape in text mode is unknown, so today any non-zero exit, timeout
   or empty answer counts as an infrastructure failure and moves to the next model.
@@ -149,16 +148,13 @@ docs, build, test, chore. Do not add yourself as a co-author.
   so they are denied under every preset until allowed by hand. Decide whether a `-free`
   model may inherit the row of its paid sibling (the table's own footnotes suggest the
   terms can differ, so the current default is conservative on purpose).
-- `offload init` on Windows with stdin closed prints the privacy question before falling
-  back to `strict` (a null device reports as a terminal there). The result is right, the
-  noise is not.
 
 ## Handoff (state on 2026-10-24)
 
 Written so a fresh session can continue without the conversation that produced this.
 
 **What exists and works:** `init`, `models`, `pick`, `allow`, `deny`, `discover`,
-`delegate` (with `--scope` and `--holdout`). 48 tests. Public repo, MIT, English only.
+`delegate` (with `--scope` and `--holdout`). 53 tests. Public repo, MIT, English only.
 Verified against a live OpenCode v2.0.32 and on one real task (see above).
 
 **Decisions already taken by the owner - do not reopen without asking:**
@@ -187,8 +183,12 @@ on a throwaway repo (19 s): visible and held-out checks both passed, and the hel
 path appeared nowhere in the executor's tree. Gotcha: pass the holdout path in the form the
 check shell understands (a Git Bash `/tmp/...` path is not visible to Windows Python).
 
-**Suggested next steps, none started:** continuing a failed delegation
-with a list of discrepancies; hints for orchestrators other than Claude; per-user rather
+**Resume (`--resume BRANCH`, done):** `--task` holds the numbered discrepancies; the work goes on a
+new `offload/...` branch cut from the earlier one, which is never touched. Only `offload/` branches
+and writing roles are accepted. Tested with a fake executor, not yet with a real model. The Windows
+`init` noise (null device reported as a terminal) is fixed by asking the console API.
+
+**Suggested next steps, none started:** hints for orchestrators other than Claude; per-user rather
 than per-project model history (today a model's record starts from zero in every project).
 
 **Working here:** run `python -m pytest tests -q` first. Edit files with the editor tool

@@ -59,8 +59,14 @@ def changed_paths(root: Path) -> list[str]:
     return paths
 
 
-def create_branch(root: Path, name: str) -> None:
-    git(root, "checkout", "-q", "-b", name)
+def create_branch(root: Path, name: str, start: str | None = None) -> None:
+    git(root, "checkout", "-q", "-b", name, *([start] if start else []))
+
+
+def branch_tip(root: Path, name: str) -> str | None:
+    """Commit a local branch points to, or None when there is no such branch."""
+    out = git(root, "rev-parse", "--verify", "-q", f"refs/heads/{name}", check=False).strip()
+    return out or None
 
 
 def checkout(root: Path, ref: str) -> None:

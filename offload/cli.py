@@ -125,7 +125,7 @@ def cmd_delegate(args) -> int:
         verdict = delegate.delegate(
             _root(args), text, role=args.role, model=args.model,
             verify_cmd=args.verify, max_attempts=args.attempts,
-            scope=args.scope or None, holdout_cmd=args.holdout,
+            scope=args.scope or None, holdout_cmd=args.holdout, resume=args.resume,
         )
     except delegate.DelegateError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -179,6 +179,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--attempts", type=int, default=3, help="models to try on infrastructure failure")
     p.add_argument("--scope", action="append", metavar="PATH",
                    help="folder the executor may change (repeatable); the rest is discarded")
+    p.add_argument("--resume", metavar="BRANCH",
+                   help="continue from an earlier offload/... branch; --task then holds the "
+                        "numbered list of discrepancies to fix")
     p.add_argument("--holdout", metavar="CMD",
                    help="second check the executor never sees; run after --verify passes. "
                         "Flag only: a config file is readable by the executor")

@@ -142,6 +142,20 @@ def _preflight(root: Path, cfg: config.Config, verify_cmd: str | None, role: str
     return verify
 
 
+def _resume_tip(root: Path, resume: str | None, role: str) -> str | None:
+    """Commit of an earlier `offload/...` branch to continue from, checked before any run."""
+    if not resume:
+        return None
+    if role in READ_ONLY:
+        raise DelegateError("--resume continues earlier work, so it needs a role that writes")
+    if not resume.startswith("offload/"):
+        raise DelegateError(f"--resume takes a branch made by the kit (offload/...), not '{resume}'")
+    tip = gitops.branch_tip(root, resume)
+    if not tip:
+        raise DelegateError(f"no such branch: {resume}")
+    return tip
+
+
 def _candidates(root, snapshot, role: str, model: str | None, attempts: int) -> list[str]:
     ranked = [c.model for c in select.ranked(root, snapshot, role)]
     if not ranked:
@@ -163,6 +177,7 @@ def delegate(
     max_attempts: int = 3,
     scope: list[str] | None = None,
     holdout_cmd: str | None = None,
+    resume: str | None = None,
     snapshot=None,
     executor=opencode.run_agent,
     now=time.time,
@@ -170,17 +185,22 @@ def delegate(
     started = time.monotonic()
     cfg = config.load(root)
     verify = _preflight(root, cfg, verify_cmd, role)
+    resume_tip = _resume_tip(root, resume, role)
     snapshot = snapshot or discover.discover(root)
     candidates = _candidates(root, snapshot, role, model, max_attempts)
 
     origin = gitops.current_ref(root)
-    base = gitops.head(root)
+    base = resume_tip or gitops.head(root)
     branch = f"offload/{_slug(task)}-{int(now())}"
 
     task_file = paths.state_dir(root) / "tasks" / f"{int(now())}.md"
     task_file.parent.mkdir(parents=True, exist_ok=True)
+    intro = (
+        "The work from an earlier attempt is already in this project. Do not redo it: fix "
+        "only the discrepancies listed below, then stop.\n\n" if resume_tip else ""
+    )
     task_file.write_text(
-        f"{task.strip()}\n\nCheck command (the orchestrator runs it itself; "
+        f"{intro}{task.strip()}\n\nCheck command (the orchestrator runs it itself; "
         f"do not skip it): {verify}\n"
         "Work only inside this project. Install nothing: if a dependency is missing, "
         "put it in BLOCKERS.\n",
@@ -193,7 +213,7 @@ def delegate(
         status="executor_error", role=role, branch=branch if writes else "", base=base[:12]
     )
     if writes:
-        gitops.create_branch(root, branch)
+        gitops.create_branch(root, branch, start=resume_tip)
     keep_branch = False
     try:
         result = None

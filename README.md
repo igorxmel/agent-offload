@@ -41,6 +41,8 @@ changed outside those folders is discarded and reported: a green check says noth
 files the task never named. With `--holdout CMD` the kit runs a second check the executor
 never saw (after the visible one passes); if it fails, the verdict is `failed`. Pass it on
 the command line only: a config file would be readable by the executor.
+To fix a failed result, run `--resume offload/<branch>` with a numbered list of discrepancies
+as the task: the earlier branch stays as it is and the fix goes on a new one.
 
 | Exit | Meaning |
 |---|---|

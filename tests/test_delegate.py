@@ -390,3 +390,63 @@ def test_holdout_command_never_reaches_the_executor_or_the_disk(tmp_path) -> Non
     for path in root.rglob("*"):
         if path.is_file() and ".git" not in path.parts:
             assert "SECRET-HOLDOUT-MARKER" not in path.read_text(encoding="utf-8", errors="ignore")
+
+
+def test_resume_builds_on_the_earlier_branch_and_leaves_it_alone(tmp_path) -> None:
+    root = make_repo(tmp_path, verify="git ls-files --error-unmatch second.txt")
+    first = delegate.delegate(
+        root, "create new.txt", snapshot=snapshot("p/m1"), executor=writer({"new.txt": "x\n"})
+    )
+    assert first.status == "failed"
+    old_tip = gitops.branch_tip(root, first.branch)
+
+    seen: list[str] = []
+
+    def fixer(root_, agent, model, message, task_file, timeout):
+        seen.append((Path(root_) / task_file).read_text(encoding="utf-8"))
+        assert (Path(root_) / "new.txt").exists()  # the earlier work is there
+        (Path(root_) / "second.txt").write_text("y\n", encoding="utf-8")
+        return result()
+
+    second = delegate.delegate(
+        root, "1. create second.txt", snapshot=snapshot("p/m1"), executor=fixer,
+        resume=first.branch,
+    )
+    assert second.status == "passed" and second.files == ["second.txt"]
+    assert second.branch != first.branch and second.base == old_tip[:12]
+    assert gitops.branch_tip(root, first.branch) == old_tip
+    assert "earlier attempt" in seen[0] and "1. create second.txt" in seen[0]
+    assert gitops.current_ref(root) == "main"
+    assert "new.txt" in gitops.git(root, "ls-tree", "-r", "--name-only", second.branch)
+
+
+def test_failed_resume_leaves_the_earlier_branch_intact(tmp_path) -> None:
+    root = make_repo(tmp_path, verify="git ls-files --error-unmatch missing.txt")
+    first = delegate.delegate(
+        root, "create new.txt", snapshot=snapshot("p/m1"), executor=writer({"new.txt": "x\n"})
+    )
+    old_tip = gitops.branch_tip(root, first.branch)
+    second = delegate.delegate(
+        root, "1. nothing", snapshot=snapshot("p/m1"), executor=lambda *a: result(code=1),
+        resume=first.branch,
+    )
+    assert second.status == "executor_error"
+    assert gitops.branch_tip(root, first.branch) == old_tip
+    assert branches(root) == sorted([first.branch, "main"])
+    assert gitops.current_ref(root) == "main"
+
+
+@pytest.mark.parametrize("resume", ["main", "offload/nope"])
+def test_resume_refuses_foreign_or_missing_branches(tmp_path, resume) -> None:
+    root = make_repo(tmp_path)
+    with pytest.raises(delegate.DelegateError):
+        delegate.delegate(root, "fix", snapshot=snapshot("p/m1"), resume=resume,
+                          executor=writer({"new.txt": "x\n"}))
+    assert branches(root) == ["main"]
+
+
+def test_resume_needs_a_writing_role(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    with pytest.raises(delegate.DelegateError):
+        delegate.delegate(root, "fix", role="review", snapshot=snapshot("p/m1"),
+                          resume="offload/x", executor=writer({}))
