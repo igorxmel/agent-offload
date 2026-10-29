@@ -130,6 +130,20 @@ passed the hidden set, files stayed in scope. What it taught:
   `failed` for this reason alone; the executor itself had used `.\gradlew.bat`.
 - The environment is the orchestrator's job, as before: the Rust GNU toolchain (no Visual
   Studio needed) and a Gradle skeleton prepared up front left nothing to improvise.
+- Network nodes (UDP discovery + TCP sync) went the same way: Rust 356 s, Kotlin 300 s, one
+  attempt each, and every hidden interop scenario passed in all three pairings
+  (rust-kotlin, kotlin-rust, kotlin-kotlin). The interop check starts real processes on
+  loopback and compares their store files.
+- **Self-test the check on a reference first.** Running the hidden scenarios against a
+  Python reference node found two gaps in the spec (which address to connect back to; the
+  Windows UDP `WSAECONNRESET` after sending to a closed port) before any executor saw it,
+  and two deliberately broken nodes confirmed the hidden set catches what the visible one
+  misses.
+- Nodes in tests must announce to loopback only: a node with no announce address falls
+  back to broadcast on the real network, which can raise a Windows Firewall prompt.
+- Every orchestrator mistake in this run was in the check command, not the code (a bare
+  `gradlew.bat`, backslashes eaten by a Python string). Run the check by hand once before
+  delegating.
 
 ## Language
 
