@@ -179,6 +179,12 @@ docs, build, test, chore. Do not add yourself as a co-author.
   the partial work and `beam-free` finished the task. Open: a quota stop is recorded in the
   history like any failure, so it lowers the model's rank although it says nothing about
   quality; it should rather mark the model unavailable for a while.
+- Later the same day the limit hit **every** free model at once (`beam-free` after 344 s,
+  then `deepseek-v4.1-flash-free` and `big-pickle` within 4 s each): the free quota is per
+  account, not per model. Trying the next model after this message is wasted; the kit
+  should recognise "Free usage limit reached", stop, and report it as its own status
+  rather than `executor_error`. Nine finished delegations (~60 min of executor time,
+  2026-10-29/30) fit into the free quota before it ran out mid-way through the tenth.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
 - The privacy table has no row for most `-free` variants (e.g. `deepseek-v4.1-flash-free`),
