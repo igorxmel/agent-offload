@@ -167,9 +167,12 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- Real-world run of the retry path: a provider error (`provider.quota`, HTTP 402) was seen
-  once in JSON mode; its shape in text mode is unknown, so today any non-zero exit, timeout
-  or empty answer counts as an infrastructure failure and moves to the next model.
+- The retry path was hit for real on 2026-10-29: after a day of work `deepseek-v4.1-flash-free`
+  stopped mid-task (288 s in) with a non-zero exit and "Free usage limit reached. Connect a
+  provider or subscribe to OpenCode Go to keep going, or switch models." The kit discarded
+  the partial work and `beam-free` finished the task. Open: a quota stop is recorded in the
+  history like any failure, so it lowers the model's rank although it says nothing about
+  quality; it should rather mark the model unavailable for a while.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
 - The privacy table has no row for most `-free` variants (e.g. `deepseek-v4.1-flash-free`),
