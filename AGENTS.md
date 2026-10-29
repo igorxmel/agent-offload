@@ -144,6 +144,12 @@ passed the hidden set, files stayed in scope. What it taught:
 - Every orchestrator mistake in this run was in the check command, not the code (a bare
   `gradlew.bat`, backslashes eaten by a Python string). Run the check by hand once before
   delegating.
+- The Windows GUI (egui, glow backend; needs mingw-w64 on PATH for the GNU toolchain) passed
+  every machine check, the app running as a sync peer, yet a screenshot showed three bugs
+  no check could see: a device count that included itself, an invisible input field, a
+  delete glyph the font lacks. **For a UI, look at it.** The fixes went back as a numbered
+  list and came back passing; the one-character glyph fix was cheaper to do by hand.
+- Stop demo processes by PID or path, never by image name: `node.exe` is also Node.js.
 
 ## Language
 
