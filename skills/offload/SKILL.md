@@ -57,7 +57,9 @@ Read the verdict, then act on the exit code:
   `git merge <branch>` or `git branch -D <branch>`.
 - **3** - the check failed or nothing changed. Send the executor a numbered list of
   discrepancies in a new task; do not explain basics.
-- **4** - every model failed for infrastructure reasons. Retry later or write it yourself.
+- **4** - every model failed for infrastructure reasons. With status `quota` the free
+  quota is used up: say so to the human (another provider can be connected) instead of
+  retrying. Otherwise retry later or write it yourself.
 - **5** - the executor edited its own limits. Its work was discarded. Do not retry blindly.
 - **2** - no acceptable model. Tell the human.
 

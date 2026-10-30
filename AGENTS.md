@@ -71,6 +71,13 @@ Facts, each observed rather than read in the docs. Re-verify after an OpenCode u
 - End-to-end run of `delegate` against a real model: 20 s, branch created, check run by the
   kit, original branch and tree untouched. Models write a bare `DONE` header without a colon;
   the report parser accepts it.
+- **OpenCode takes the project folder from `PWD`, not from the process's working directory**
+  (2026-10-30). Started with `cwd=project` from a Git Bash whose `PWD` pointed elsewhere, the
+  executor ran `cd` and got the caller's folder - so every deny rule applied to the wrong
+  tree. `opencode.agent_env` sets `PWD` to the project for every run; a test guards it.
+- **Steps stream on stderr as they happen** (`Read PROTOCOL.md` 1.3 s into a run), the final
+  answer on stdout. Silence on both means the provider stopped answering: the stall
+  detector (`stall_timeout`) relies on this.
 
 ## First real task (2026-10-24): porting `batfile.py` to Rust
 
@@ -151,6 +158,65 @@ passed the hidden set, files stayed in scope. What it taught:
   list and came back passing; the one-character glyph fix was cheaper to do by hand.
 - Stop demo processes by PID or path, never by image name: `node.exe` is also Node.js.
 
+### Providers beyond OpenCode Zen (2026-10-29/30)
+
+The executor is OpenCode; the provider only supplies the model, so any provider OpenCode
+connects to can be tried with the same denies, checks and branches.
+
+- **The free quota is per account.** Nine delegations (~60 min of executor time) fit into
+  OpenCode Zen's free quota; then `beam-free` stopped mid-task with "Free usage limit
+  reached" and every other free model refused within seconds. It came back hours later,
+  for one request. OpenRouter's free tier ended the same way ("Rate limit exceeded:
+  free-models-per-day"), Google AI Studio's Pro model had none ("exceeded your current
+  quota").
+- **Groq's free tier cannot drive an agent.** One-file probes passed, but the first real
+  request was 8562 input tokens against a 7000 tokens-per-minute limit: OpenCode's system
+  prompt and tool definitions alone come close to that. `gpt-oss-120b` also called a tool
+  `exec` that does not exist (from its own training harness). For an agent the limit that
+  matters is tokens per minute per request, not requests per day.
+- **OpenRouter's `:free` models can.** `thinkingmachines/inkling:free` built the Android app
+  (24 min) and both halves of a protocol fix (18 and 14 min), passing every hidden check.
+  `nvidia/nemotron-3-ultra-550b-a55b:free` worked for 12 minutes and then stopped answering
+  until the 30-minute timeout threw the work away. `gemini-3.8-flash` was right but slow
+  (222 s for a two-file question).
+- **Probe with a real agent step, not a one-line prompt.** A read-only `offload-explore` run
+  on the actual repository with a question that needs two files separates working models
+  from broken ones in seconds; a one-line prompt passed models that then failed every real
+  request.
+- Inkling committed a 380 MB JVM heap dump with its work; it was merged by hand without it.
+- **Real hardware found what loopback could not.** On real Wi-Fi (Windows PC + Android 15
+  phone) data synced both ways, but only the PC saw the phone: Windows sends a limited
+  broadcast through one adapter, here a virtual one (VirtualBox/Docker/WSL). The fix went
+  into the spec first (reply to a hello by unicast), then into a loopback scenario that
+  reproduces the one-way case, self-tested on the reference, then delegated. Afterwards a
+  change crossed in under a second from phone to PC and in about two seconds back.
+
+What the kit learned from this is now code (see "Guards" below).
+
+## Guards (2026-10-30)
+
+Each closes a way the kit went wrong on real providers; `tests/test_guards.py` covers them
+and every one was checked by mutation.
+
+- **Price** (`catalog`): prices come from the public catalog OpenCode is built on
+  (models.dev). Only a listed price of zero is accepted; unknown is denied. Without this,
+  connecting OpenRouter put 358 paid models (Claude among them) next to 23 free ones in the
+  acceptable list. A free-tier key (Groq, Google) is not billed although a price is listed:
+  the person allows the provider with `offload allow groq/*`.
+- **Tool use** (`catalog`): a model the catalog marks as unable to call tools is denied,
+  unknown included. Music and moderation models are free and would otherwise be tried
+  first while there is no history.
+- **Quota** (`quota`): known provider messages mark the provider exhausted for
+  `quota_cooldown_hours` (1 h); its other models are skipped, not tried and refused. The
+  stop is recorded but not held against the model. All attempts stopped by quota give the
+  status `quota` (exit 4).
+- **Stall** (`opencode.run_agent`): `stall_timeout` (600 s) without a byte on stdout or
+  stderr kills the run and moves on.
+- **File size** (`delegate`): files above `max_file_kb` (5 MB) are discarded and reported.
+- **`PWD`**: see "Verified behaviour" above.
+- An explicit `--model` missing from the cached snapshot (a provider connected after the
+  last `discover`) triggers one refresh instead of "unknown model".
+
 ## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is
@@ -173,68 +239,32 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- The retry path was hit for real on 2026-10-29: after a day of work `deepseek-v4.1-flash-free`
-  stopped mid-task (288 s in) with a non-zero exit and "Free usage limit reached. Connect a
-  provider or subscribe to OpenCode Go to keep going, or switch models." The kit discarded
-  the partial work and `beam-free` finished the task. Open: a quota stop is recorded in the
-  history like any failure, so it lowers the model's rank although it says nothing about
-  quality; it should rather mark the model unavailable for a while.
-- Later the same day the limit hit **every** free model at once (`beam-free` after 344 s,
-  then `deepseek-v4.1-flash-free` and `big-pickle` within 4 s each): the free quota is per
-  account, not per model. Trying the next model after this message is wasted; the kit
-  should recognise "Free usage limit reached", stop, and report it as its own status
-  rather than `executor_error`. Nine finished delegations (~60 min of executor time,
-  2026-10-29/30) fit into the free quota before it ran out mid-way through the tenth.
-- **Groq's free tier cannot drive an agent** (tried 2026-10-30). Both models answered a
-  one-file probe through OpenCode, but on a real task `qwen/qwen3.8-27b` was refused at the
-  first request: 8562 input tokens against a 7000 tokens-per-minute limit. OpenCode's
-  system prompt and tool definitions alone come close to that, and the context only grows.
-  `openai/gpt-oss-120b` got further but called a tool `exec` that does not exist (from its
-  own training harness) and Groq rejected the call. For an agent the limit that matters is
-  **tokens per minute per request**, not requests per day; check it before adding a provider.
-- **OpenRouter's free models can.** On a real agent step (read-only agent, full OpenCode
-  context, two files) three `:free` models answered correctly in 8-13 s; Google AI Studio's
-  `gemini-3.8-flash` was right but took 222 s and its Pro model has no free quota. The
-  Android task then went to `nvidia/nemotron-3-ultra-550b-a55b:free`, which worked for 12
-  minutes and then stopped answering (provider queue; the model still hung on a one-word
-  prompt afterwards) until the 30-minute timeout discarded everything.
-  `thinkingmachines/inkling:free` did the same task in 24 minutes and passed the visible and
-  hidden checks. So the cascade idea holds: the method does not depend on one provider.
-- The kit needs a **stall detector**: no new agent step for N minutes means kill and move on.
-  One large timeout wasted 18 minutes and threw away 12 minutes of useful work.
-- **Probe with a real agent step, not a one-line prompt.** Groq passed a one-file probe and
-  failed every real request; a read-only `offload-explore` run on the actual repository
-  with a question that needs two files tells working models from broken ones in seconds.
-- Inkling committed a 380 MB JVM heap dump (`java_pid*.hprof`) with its work. The kit
-  could refuse or drop files above a size limit; until then, read the file list.
-- **Real hardware found what loopback could not.** On real Wi-Fi (Windows PC + Android 15
-  phone) data synced both ways, but only the PC saw the phone: Windows sends a limited
-  broadcast through one adapter, here a virtual one (VirtualBox/Docker/WSL). The fix went
-  into the spec first (reply to a hello by unicast), then into a loopback scenario that
-  reproduces the one-way case, self-tested on the reference, then delegated to Rust and
-  Kotlin (`inkling:free`, 18 and 14 min). Afterwards a change crossed in under a second
-  from phone to PC and in about two seconds the other way.
-- A model passed with `--model` that is missing from the cached snapshot (a provider added
-  after the last `discover`) is refused as "unknown model". The kit should refresh once
-  before refusing.
+- Partial work is thrown away on a timeout or a stall. Nemotron's 12 useful minutes were
+  lost that way; keeping such work on a branch marked unverified might be worth it.
+- Model choice without history is a guess in catalog order. The catalog also has context
+  size and release date, which could order the guesses without naming any model.
 - Hints for orchestrators other than Claude - after checking how each environment reads
   instructions.
+- Per-user rather than per-project model history: today a model's record starts from zero
+  in every project.
 - The privacy table has no row for most `-free` variants (e.g. `deepseek-v4.1-flash-free`),
   so they are denied under every preset until allowed by hand. Decide whether a `-free`
   model may inherit the row of its paid sibling (the table's own footnotes suggest the
   terms can differ, so the current default is conservative on purpose).
 
-## Handoff (state on 2026-10-24)
+## Handoff (state on 2026-10-30)
 
 Written so a fresh session can continue without the conversation that produced this.
 
-**What exists and works:** `init`, `models`, `pick`, `allow`, `deny`, `discover`,
-`delegate` (with `--scope` and `--holdout`). 53 tests. Public repo, MIT, English only.
-Verified against a live OpenCode v2.0.32 and on one real task (see above).
+**What exists and works:** `init`, `models`, `pick`, `allow`, `deny` (also `provider/*`),
+`discover`, `delegate` (with `--scope`, `--holdout`, `--resume`), and the guards above.
+72 tests. Public repo, MIT, English only. Verified against a live OpenCode v2.0.32, on the
+`batfile.py` port and on the todo-sync experiment (about fifteen delegations).
 
 **Decisions already taken by the owner - do not reopen without asking:**
 - The kit is orchestrator-agnostic: any agent that can run a shell command can drive it.
-  OpenCode is the executor; free models only.
+  OpenCode is the executor. Models must be free; any provider OpenCode connects to may
+  supply them (decided 2026-10-30 after the Zen quota ran out).
 - The owner trusts DeepSeek V4.1 Flash for coding more than beam-free, and the single
   comparison agrees (see the table). Put it first through `prefer`/`--model`, after
   allowing it manually.
@@ -243,30 +273,28 @@ Verified against a live OpenCode v2.0.32 and on one real task (see above).
   keep this repository focused on the kit.
 - Privacy policy is the owner's call per project; never loosen it on your own.
 
-**The experiment is archived, not in the repository:**
-`.experiments/rust-batfile-experiment.zip` (gitignored, 25 KB): both Rust ports
-(`deepseek/`, `beam-clean/`), the out-of-repo check `compare.py`, the task texts, the
-linker environment `rustenv.sh` and both verdicts under `method/`, with a README inside.
-The working folders `D:/Code/zx-offload-check` and `D:/Code/zx-rust-experiment` it came
-from are not needed any more. Nothing from them was ever pushed. The lessons are recorded
-in this file.
+**Experiments, not in the repository:**
+- `.experiments/rust-batfile-experiment.zip` (gitignored, 25 KB): both Rust ports, the
+  out-of-repo check, task texts, the linker environment and both verdicts, with a README.
+- `.experiments/todo-sync` (gitignored, its own git repository): the Rust + Kotlin to-do
+  app with LAN sync, Windows (egui) and Android (Compose) apps. Its hidden checks,
+  reference node and task texts live in `D:/Code/todo-sync-check`, outside every
+  repository on purpose.
 
-**Held-out check (`--holdout CMD`, done):** CLI flag only, never in config or the task file,
+**Machine setup used by the experiments** (not needed by the kit): Rust GNU toolchain,
+mingw-w64 (scoop) on PATH for GUI crates, Gradle in `%LOCALAPPDATA%/gradle-dist`,
+Android command-line tools (scoop `android-clt`, licenses accepted by the owner).
+OpenCode has Groq, Google and OpenRouter keys connected.
+
+**Held-out check (`--holdout CMD`):** CLI flag only, never in config or the task file,
 because the executor can read the repository. Runs only after the visible check is green;
-a failure makes the verdict `failed`. Tried on 2026-10-29 against `deepseek-v4.1-flash-free`
-on a throwaway repo (19 s): visible and held-out checks both passed, and the held-out test
-path appeared nowhere in the executor's tree. Gotcha: pass the holdout path in the form the
-check shell understands (a Git Bash `/tmp/...` path is not visible to Windows Python).
+a failure makes the verdict `failed`. Pass the path in the form the check shell
+understands (a Git Bash `/tmp/...` path is not visible to Windows Python).
 
-**Resume (`--resume BRANCH`, done):** `--task` holds the numbered discrepancies; the work goes on a
-new `offload/...` branch cut from the earlier one, which is never touched. Only `offload/` branches
-and writing roles are accepted. Tried on 2026-10-29 with `deepseek-v4.1-flash-free`: a held-out failure, then a resume with one
-discrepancy produced a one-line diff on a new branch (30 s), the earlier branch stayed intact. The Windows
-`init` noise (null device reported as a terminal) is fixed by asking the console API.
-
-**Suggested next steps, none started:** hints for orchestrators other than Claude; per-user rather
-than per-project model history (today a model's record starts from zero in every project).
+**Resume (`--resume BRANCH`):** `--task` holds the numbered discrepancies; the work goes on
+a new `offload/...` branch cut from the earlier one, which is never touched.
 
 **Working here:** run `python -m pytest tests -q` first. Edit files with the editor tool
-rather than shell heredocs: `\n` inside a heredoc silently becomes a real newline and
-broke three edits during the first session.
+rather than shell heredocs or `sed`: `\n` inside a heredoc silently becomes a real newline,
+and a backslash in `sed` or a Python string gets eaten. Both broke edits again during the
+todo-sync experiment, in JSON config and task files.

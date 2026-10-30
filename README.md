@@ -43,13 +43,17 @@ never saw (after the visible one passes); if it fails, the verdict is `failed`. 
 the command line only: a config file would be readable by the executor.
 To fix a failed result, run `--resume offload/<branch>` with a numbered list of discrepancies
 as the task: the earlier branch stays as it is and the fix goes on a new one.
+An executor that prints nothing for `stall_timeout` seconds (default 600) is killed and the
+next model tried: a provider that stops answering would otherwise hold the run until
+`executor_timeout`. Files larger than `max_file_kb` (default 5 MB) are discarded and
+reported - one executor committed a 380 MB heap dump.
 
 | Exit | Meaning |
 |---|---|
 | 0 | check passed |
 | 2 | no acceptable model |
 | 3 | check failed, or nothing changed |
-| 4 | every executor attempt failed |
+| 4 | every executor attempt failed (status `quota` when every one hit an exhausted quota) |
 | 5 | the executor touched its own limits |
 
 Roles: `build` (writes), and read-only `explore`, `plan`, `review` that return a summary,
@@ -80,6 +84,22 @@ some models prompts are used for training. So `init` asks what kind of code this
 Without a human (an orchestrator ran `init` itself) `strict` is chosen. The core rule:
 **unknown is denied.** A model with no privacy data is not allowed until you allow it
 manually - otherwise a broken page parser would silently open access to everything.
+
+Two more facts come from the public catalog OpenCode is built on
+([models.dev](https://models.dev)), and the same rule applies to them:
+
+- **Price.** Only models whose listed price is zero are used. Once you connect a provider
+  with a key (OpenRouter, Groq, Google), `opencode models` lists its paid models too -
+  hundreds of them - and the kit must not quietly pick one. A key on a free tier (Groq,
+  Google AI Studio) is not billed although the catalog lists a price; allow such a
+  provider yourself: `offload allow groq/*`.
+- **Tool use.** A model that cannot call tools cannot work as an agent, however free it
+  is (music and moderation models show up in the lists too).
+
+Any provider OpenCode can connect to works: the executor is OpenCode, the provider only
+supplies the model. When a provider reports an exhausted quota, its other models are
+skipped for an hour (`quota_cooldown_hours`) instead of being tried and refused one by
+one, and the stop is not held against the model's record.
 
 Agent profiles forbid the executor from leaving the project folder (OpenCode **allows**
 it by default), reading `*.env` and keys, `git push`, installing packages, and editing its
