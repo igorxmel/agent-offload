@@ -1,126 +1,170 @@
+<div align="center">
+
 # agent-offload
 
-Hand bulk work to [OpenCode](https://opencode.ai)'s free models, and leave your main
-agent - Claude, Codex, Antigravity, anything - only the goal, a short verdict and the
-check. Expensive tokens go to decisions, not to typing.
+**Your expensive agent decides. Free models type. A check you trust says who was right.**
 
-> **Status: early but working end to end.** `init`, acceptable-model discovery, selection
-> and `delegate` are done and have been run against real models.
+Let Claude, Codex or any agent that can run a shell command hand bulk coding work to free
+models through [OpenCode](https://opencode.ai) - on a separate branch, in a separate
+working copy, behind a check the executor cannot fake.
 
-## The easy way to use it
+`Python 3.10+` · `no dependencies` · `MIT` · `any orchestrator` · `any OpenCode provider`
+
+</div>
+
+```text
+$ offload delegate --scope kotlin --task-file due-dates.md
+PASSED  model=openrouter/thinkingmachines/inkling:free  role=build  851s
+branch: offload/kotlin-core-due-dates-1793342820-5cea11  (base 40b297f2a1c3)
+files: kotlin/core/src/main/kotlin/todo/Task.kt, kotlin/core/src/main/kotlin/todo/ListOrder.kt, ...
+diff: 6 files changed, 412 insertions(+), 18 deletions(-)
+check [PASSED]: cd kotlin && .\gradlew.bat -q test installDist && app.bat conform ...
+executor spent: 93 steps, 95971 in / 10172 out / 13167 reasoning tokens, 5805952 from cache, $0
+merge: git merge offload/kotlin-core-due-dates-...   discard: git branch -D offload/...
+```
+
+An abridged verdict from the A/B run below. Your agent reads those lines, not 400 lines
+of someone else's code.
+
+## What you get
+
+| | What it does | Measured |
+|---|---|---|
+| **Delegate** | Free model works on its own branch in its own git worktree; your tree is never touched | 15+ real delegations, Rust / Kotlin / egui / Compose |
+| **Verify** | The kit runs your check itself, plus a hidden one the executor never saw | Free models' code passed 101/101 hidden checks |
+| **Parallel** | Independent tasks run at once, each in a warm working copy | 2 delegations side by side, main tree clean throughout |
+| **Free review** | A free model reviews a branch first; you read the findings | `--role review --on <branch>` |
+| **Stay free** | Only models with a listed price of zero and tool use; paid ones are refused | 358 paid models filtered out after connecting OpenRouter |
+| **Survive providers** | Quota stops skip the provider, stalls are killed, the next model is tried | Zen quota ran out mid-task; OpenRouter finished it |
+| **Keep it private** | Per-project privacy policy; unknown terms are denied | `strict` by default when nobody is there to ask |
+
+## Quick start
 
 You do not need to learn the commands. Give this repository to your agent and say:
 
 > Install agent-offload and run `offload init` in this project.
 
-Then it can delegate on its own. The commands below are what it calls.
+Or by hand:
+
+```bash
+pip install git+https://github.com/igorxmel/agent-offload
+offload init --verify "pytest -q"        # how to tell a good result from a bad one
+offload models --allowed                 # what the project policy lets through
+offload delegate --task-file task.md     # hand it over, get a verdict
+```
+
+Needs [`opencode`](https://opencode.ai/docs) on `PATH`. Nothing else is installed into
+your project: no dependencies, by design.
 
 ## How it works
 
-The orchestrator needs one ability - run a shell command - so the kit is not tied to a
-particular agent. Everything shared lives in neutral files (`AGENTS.md`, `.offload/`),
-and `skills/offload/SKILL.md` is a hint for environments that read skills.
-
-```
-offload init                       set the kit up in a project
-offload models [--allowed]         models, and whether the policy allows them
-offload pick --role build -v       choose a model
-offload allow|deny <model>         manual exception
-offload discover                   refresh data from the official pages
-offload delegate --task "..."      hand a task over, get a verdict
+```mermaid
+flowchart LR
+    O["Orchestrator<br/>(Claude, Codex, ...)"] -- "task + check" --> K["offload delegate"]
+    K -- "free, allowed model" --> W["git worktree slot<br/>branch offload/..."]
+    W -- "OpenCode executor<br/>with explicit denies" --> W
+    K -- "runs check + hidden check" --> W
+    K -- "10-line verdict" --> O
+    O -- "merge / --resume / discard" --> R[("your repo")]
 ```
 
-`delegate` works on a scratch branch `offload/...` and never touches your tree. It picks an
-acceptable model, runs the executor, then **runs your check command itself** and returns a
-short verdict: model, changed files, diffstat and what the check actually printed. If a
-model fails for infrastructure reasons (timeout, provider error, empty answer) it tries the
-next acceptable one. A failed *check* is not retried: that is a quality verdict, and it
-goes to you. If the executor edits its own limits, all its work is discarded. With
-`--scope PATH` (repeatable, or `scope` in `.offload/config.json`) anything the executor
-changed outside those folders is discarded and reported: a green check says nothing about
-files the task never named. With `--holdout CMD` the kit runs a second check the executor
-never saw (after the visible one passes); if it fails, the verdict is `failed`. Pass it on
-the command line only: a config file would be readable by the executor.
-To fix a failed result, run `--resume offload/<branch>` with a numbered list of discrepancies
-as the task: the earlier branch stays as it is and the fix goes on a new one.
-An executor that prints nothing for `stall_timeout` seconds (default 600) is killed and the
-next model tried: a provider that stops answering would otherwise hold the run until
-`executor_timeout`. Files larger than `max_file_kb` (default 5 MB) are discarded and
-reported - one executor committed a 380 MB heap dump.
-The verdict also says what the executor spent (steps, tokens, cost), read from
-`opencode stats` before and after the run; it is kept in the history next to the result.
+1. **Pick a model** that is free, can call tools and fits the project's privacy policy.
+   Prices and capabilities come from the [models.dev](https://models.dev) catalog OpenCode
+   is built on, privacy terms from OpenCode's own page - fetched at run time, never
+   hardcoded.
+2. **Run it** in a working copy of its own, as an OpenCode agent whose limits are
+   explicit denies: no leaving the folder, no `.env`, no `git push`, no `pip install`, no
+   editing its own limits.
+3. **Check it yourself.** The executor's report is shown but never trusted: the kit runs
+   the check, then the held-out check, and reports what they actually printed.
+4. **Hand back a verdict.** Merge it, `--resume` it with a numbered list of what is wrong,
+   or let a free model review it first.
 
-| Exit | Meaning |
+## Proof
+
+**A/B on one real task** (due dates across a Rust core, a Kotlin core, an egui Windows
+app and a Compose Android app; same start commit, same model, fresh sessions):
+
+| | Orchestrator alone | Orchestrator + agent-offload |
+|---|---|---|
+| Orchestrator output tokens | 44.2k | **17.1k** (2.6x fewer) |
+| Orchestrator cost, list-price weighted | 100% | **~80%** |
+| Wall time | **13 min** | 96 min (6 delegations in a row) |
+| Hidden checks passed | 101/101 | 101/101 |
+| Executor | - | 505 steps, ~700k tokens, **$0** |
+
+The saving is real but modest on a task this size, and it was paid for in time. That run
+was sequential; parallel slots and free first review came out of it. The full numbers,
+including what did not work, are in [AGENTS.md](AGENTS.md#measuring-the-saving).
+
+**What free models built** in the todo-sync experiment, every piece behind hidden checks
+the executor never saw: a merge core in Rust and in Kotlin, UDP discovery and TCP sync on
+both, a Windows app and an Android app that sync over real Wi-Fi in 1-2 seconds.
+
+## Guards, each from something that went wrong
+
+| What happened | What the kit does now |
 |---|---|
-| 0 | check passed |
-| 2 | no acceptable model |
-| 3 | check failed, or nothing changed |
-| 4 | every executor attempt failed (status `quota` when every one hit an exhausted quota) |
-| 5 | the executor touched its own limits |
+| A model "passed" by fitting code to the visible tests | `--holdout CMD`: a second check, never written to disk or the task |
+| An executor committed a linker hack and stray objects outside its folder | `--scope PATH`: changes elsewhere are discarded and listed |
+| An executor committed a 380 MB heap dump | files above `max_file_kb` (5 MB) are discarded |
+| A provider stopped answering; 30 minutes lost | `stall_timeout`: silence for 10 min kills the run, next model |
+| The free quota ran out for every model at once | quota messages mark the provider exhausted for an hour; status `quota` |
+| Connecting OpenRouter listed 358 paid models as acceptable | only a listed price of zero passes; `offload allow groq/*` for free-tier keys |
+| OpenCode worked in the caller's folder, not the project | the executor's `PWD` is always the project |
+| An executor tried to edit its own limits | the work is discarded, exit 5 |
 
-Roles: `build` (writes), and read-only `explore`, `plan`, `review` that return a summary,
-a plan or a review without a branch or a check.
+## Commands
 
-Every command has `--json` for machine parsing.
+```text
+offload init                         set the kit up in a project
+offload models [--allowed]           models, and whether the policy allows them
+offload pick --role build -v         choose a model (basis: prefer | history | guess)
+offload allow|deny <model|provider/*>
+offload discover                     refresh models, prices, privacy terms
+offload delegate --task-file F       hand a task over, get a verdict
+    --scope PATH  --holdout CMD  --resume BRANCH  --model M  --verify CMD
+    --role review|explore|plan  --on BRANCH
+```
 
-## Nothing is hardcoded
+Every command takes `--json` (before the command name). Exit codes: `0` passed, `2` no
+acceptable model, `3` check failed or nothing changed, `4` every attempt failed (status
+`quota` when they all hit a quota), `5` the executor touched its own limits.
 
-The repository contains no model name and no verdict about one. The model list comes
-from `opencode` itself, data-handling terms from the official page, and the result is
-cached for a day. The choice among acceptable models is based on **your own runs**:
-popularity rankings do not show quality, and other people's benchmarks measure other
-people's tasks. Until there are runs the choice is honestly labelled a guess
-(`basis: guess`).
+## Privacy and cost
 
-## Privacy
+Free models run on someone else's servers: **your code leaves your machine**, and some
+providers train on prompts. `init` asks what kind of code this is:
 
-Free models run on someone else's servers: your code **leaves your machine**, and for
-some models prompts are used for training. So `init` asks what kind of code this is:
-
-| Preset | What it allows |
+| Preset | Allows |
 |---|---|
-| `strict` | no training, no retention of prompts |
+| `strict` (default without a human) | no training, no retention of prompts |
 | `private` | no training, retention up to 30 days |
 | `open` | anything, including models that train on prompts |
 
-Without a human (an orchestrator ran `init` itself) `strict` is chosen. The core rule:
-**unknown is denied.** A model with no privacy data is not allowed until you allow it
-manually - otherwise a broken page parser would silently open access to everything.
+The rule everywhere is **unknown is denied**: a model with no privacy data, no known price
+or no known tool use is not used until you allow it by hand. A broken page parser closes
+access; it never opens it.
 
-Two more facts come from the public catalog OpenCode is built on
-([models.dev](https://models.dev)), and the same rule applies to them:
+## Works with
 
-- **Price.** Only models whose listed price is zero are used. Once you connect a provider
-  with a key (OpenRouter, Groq, Google), `opencode models` lists its paid models too -
-  hundreds of them - and the kit must not quietly pick one. A key on a free tier (Groq,
-  Google AI Studio) is not billed although the catalog lists a price; allow such a
-  provider yourself: `offload allow groq/*`.
-- **Tool use.** A model that cannot call tools cannot work as an agent, however free it
-  is (music and moderation models show up in the lists too).
+| Orchestrator | | Executor providers (through OpenCode) | |
+|---|---|---|---|
+| Claude Code | used daily, skill in `skills/offload` | OpenCode Zen free models | verified |
+| Any agent that runs shell commands | by design | OpenRouter `:free` models | verified |
+| Codex, Cursor, others | not tested yet | Google AI Studio | works, slow |
+| | | Groq free tier | too small for an agent (7k tokens/min) |
 
-Any provider OpenCode can connect to works: the executor is OpenCode, the provider only
-supplies the model. When a provider reports an exhausted quota, its other models are
-skipped for an hour (`quota_cooldown_hours`) instead of being tried and refused one by
-one, and the stop is not held against the model's record.
+## When not to use it
 
-Agent profiles forbid the executor from leaving the project folder (OpenCode **allows**
-it by default), reading `*.env` and keys, `git push`, installing packages, and editing its
-own limits (`.offload/`, `.opencode/`). The denies are explicit:
-without a human the `--auto` flag approves everything not denied outright.
+- **Small tasks.** Reading a weak model's result costs more than writing it yourself.
+- **No machine check.** Without `verify` the kit refuses to delegate, on purpose.
+- **When minutes matter.** Delegation trades the orchestrator's tokens for wall time.
+- **Secret code on free tiers.** Check what the policy allows before you loosen it.
 
-## Install
+## Contributing
 
-```
-pip install .        # or run in place: python -m offload ...
-```
+Rules for working on the kit, verified behaviour of OpenCode and every experiment's
+lessons live in [AGENTS.md](AGENTS.md). Run `python -m pytest tests -q` first.
 
-No dependencies: the kit is installed into other people's projects, and pulling extras
-into them would be rude. Needs `opencode` on `PATH` and Python 3.10+.
-
-## Honest note on savings
-
-The gain grows with task size and shrinks with a weak check. Do not delegate small
-things or anything you cannot verify: reviewing a weak model's bad code costs more than
-writing it yourself. Without a check command (`verify`) the kit refuses to delegate.
-
-License: MIT.
+License: [MIT](LICENSE).
