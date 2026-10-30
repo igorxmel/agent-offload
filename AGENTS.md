@@ -233,6 +233,33 @@ included toolchain setup and provider research, and most of the orchestrator's c
 re-reading a long session context. A fair one is an A/B on one task in fresh sessions:
 the orchestrator alone versus the orchestrator with the kit.
 
+### First A/B (2026-10-30): due dates across Rust, Kotlin, egui and Compose
+
+One task (PROTOCOL.md 1.1: optional `due`, sixth merge key, list order with a runner, UI in
+both apps), one start commit, warm builds, two fresh scheduled sessions on the same model
+(Opus 5.5). Arm A worked alone; arm B delegated through the kit to
+`openrouter/thinkingmachines/inkling:free`.
+
+| | A: alone | B: through the kit |
+|---|---|---|
+| wall time | 13 min | 96 min (6 delegations, run one after another) |
+| orchestrator output tokens | 44.2k | 17.1k |
+| orchestrator cache write / cache read | 137k / 3.81M | 102k / 4.08M |
+| executor | - | 505 steps, 593k in / 56k out / 47k reasoning, 33.5M cache reads, $0 |
+| hidden checks (71 vectors x 2 languages, 30 interop runs) | all pass | all pass |
+
+Weighted by list price (output 5x input, cache write ~2x, cache read 0.1x), B cost the
+orchestrator about **20% less** than A, at about **7x the wall time**. Output fell 2.6x,
+but reading the session context back on every turn did not shrink: B's session lived
+longer and re-read about as much. Two of B's four first delegations had real bugs the
+visible checks missed (merge key order, "today" in UTC, no way to give a task a due date);
+the orchestrator found them by reading the diffs and fixed each with one `--resume`.
+
+What this says: on a medium task the saving is real but modest, and paid for in time. It
+grows with the size of the implementation relative to the orchestrator's reading and
+review, and it is eaten by every extra turn the orchestrator spends waiting or reviewing.
+One run per arm: indicative, not a benchmark.
+
 ## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is
