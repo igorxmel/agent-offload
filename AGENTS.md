@@ -192,6 +192,21 @@ docs, build, test, chore. Do not add yourself as a co-author.
   `openai/gpt-oss-120b` got further but called a tool `exec` that does not exist (from its
   own training harness) and Groq rejected the call. For an agent the limit that matters is
   **tokens per minute per request**, not requests per day; check it before adding a provider.
+- **OpenRouter's free models can.** On a real agent step (read-only agent, full OpenCode
+  context, two files) three `:free` models answered correctly in 8-13 s; Google AI Studio's
+  `gemini-3.8-flash` was right but took 222 s and its Pro model has no free quota. The
+  Android task then went to `nvidia/nemotron-3-ultra-550b-a55b:free`, which worked for 12
+  minutes and then stopped answering (provider queue; the model still hung on a one-word
+  prompt afterwards) until the 30-minute timeout discarded everything.
+  `thinkingmachines/inkling:free` did the same task in 24 minutes and passed the visible and
+  hidden checks. So the cascade idea holds: the method does not depend on one provider.
+- The kit needs a **stall detector**: no new agent step for N minutes means kill and move on.
+  One large timeout wasted 18 minutes and threw away 12 minutes of useful work.
+- **Probe with a real agent step, not a one-line prompt.** Groq passed a one-file probe and
+  failed every real request; a read-only `offload-explore` run on the actual repository
+  with a question that needs two files tells working models from broken ones in seconds.
+- Inkling committed a 380 MB JVM heap dump (`java_pid*.hprof`) with its work. The kit
+  could refuse or drop files above a size limit; until then, read the file list.
 - A model passed with `--model` that is missing from the cached snapshot (a provider added
   after the last `discover`) is refused as "unknown model". The kit should refresh once
   before refusing.
