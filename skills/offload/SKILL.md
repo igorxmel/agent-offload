@@ -49,7 +49,35 @@ task that belongs in one place: stray files elsewhere are discarded and reported
 `--holdout "<cmd>"` with a check the executor must not know about (kept outside the repo);
 never show its output to the executor. If the result is close but wrong, retry with
 `--resume offload/<branch> --task "1. ... 2. ..."` (numbered discrepancies) instead of starting over. The tree must be clean
-(commit or stash first). Work happens on a branch `offload/...`; your branch is never touched.
+(commit or stash first). Work happens on a branch `offload/...` in a separate working copy
+under `.offload/state/worktrees/`; your tree is never touched. Git-ignored files the build
+needs (an SDK path in `local.properties`, say) go into `worktree_copy` in
+`.offload/config.json`.
+
+Put the task in a file and pass `--task-file`: a task with quotes or `$` passed as
+`--task` on a command line gets mangled by the shell. `--json` goes before `delegate`.
+
+## Saving time and your own tokens
+
+Measured on one medium task (see AGENTS.md, "Measuring the saving"): delegating cut the
+orchestrator's output 2.6x but its total cost only ~20%, because every turn spent waiting
+or reviewing re-reads the whole session. So:
+
+- **Run independent tasks at the same time.** Each delegation takes its own working
+  copy, so start them as separate background commands (one per `--scope`, e.g. `rust`
+  and `kotlin`) and handle each verdict when it arrives. Do not poll in between.
+- **Fewer, larger tasks.** Each delegation costs you a few turns of reading; six small
+  ones cost more than three larger ones.
+- **Let a free model do the first review:**
+  `offload delegate --role review --on offload/<branch> --task-file <what the change was for>`.
+  It reads the diff in its own working copy and returns findings; you read the findings
+  and spot-check, instead of reading the whole diff. Hidden checks (`--holdout`) remain
+  the real safety net.
+- **Put what you would catch in review into the visible check.** A bug the check catches
+  is fixed by the executor in the same run; a bug only you catch costs a `--resume` round.
+- **A cheaper orchestrator for the loop.** Writing the spec and the hidden checks needs a
+  strong model; delegating, reading verdicts and merging does not. If your environment
+  lets you choose, run that loop in a short session on a cheaper model.
 
 Read the verdict, then act on the exit code:
 

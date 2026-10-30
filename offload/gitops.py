@@ -50,6 +50,10 @@ def current_ref(root: Path) -> str:
     return head(root) if name == "HEAD" else name
 
 
+def merge_base(root: Path, a: str, b: str) -> str:
+    return git(root, "merge-base", a, b).strip()
+
+
 def changed_paths(root: Path) -> list[str]:
     """Paths with uncommitted changes, untracked files included, ignored ones not."""
     paths = []

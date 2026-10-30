@@ -102,7 +102,7 @@ def _format_verdict(v) -> str:
         lines.append(f"held-out check [{held}]")
         if held == "FAILED":
             lines.append(v.holdout["tail"] or "(no output)")
-    for name in ("DONE", "NOT DONE", "BLOCKERS", "DECISIONS", "RAW"):
+    for name in ("ANSWER", "DONE", "NOT DONE", "BLOCKERS", "DECISIONS", "RAW"):
         if v.report.get(name):
             lines.append(f"{name}: {v.report[name]}")
     for attempt in v.attempts:
@@ -134,6 +134,7 @@ def cmd_delegate(args) -> int:
             _root(args), text, role=args.role, model=args.model,
             verify_cmd=args.verify, max_attempts=args.attempts,
             scope=args.scope or None, holdout_cmd=args.holdout, resume=args.resume,
+            on=args.on,
         )
     except delegate.DelegateError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -190,6 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--resume", metavar="BRANCH",
                    help="continue from an earlier offload/... branch; --task then holds the "
                         "numbered list of discrepancies to fix")
+    p.add_argument("--on", metavar="BRANCH",
+                   help="read-only roles: look at this branch (e.g. --role review on an "
+                        "offload/... branch) in a separate working copy")
     p.add_argument("--holdout", metavar="CMD",
                    help="second check the executor never sees; run after --verify passes. "
                         "Flag only: a config file is readable by the executor")

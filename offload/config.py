@@ -36,6 +36,9 @@ class Config:
     # Files the executor leaves behind that are larger than this (kilobytes) are
     # discarded: heap dumps and build outputs do not belong in a commit.
     max_file_kb: int = 5120
+    # Git-ignored files a delegation's working copy needs, copied in from the
+    # project (relative paths), e.g. an Android SDK path in `local.properties`.
+    worktree_copy: list[str] = field(default_factory=list)
     # Hours a provider is skipped after it reported an exhausted quota.
     quota_cooldown_hours: float = 1.0
     # Folders the executor may change, relative to the project root. Empty means no
@@ -56,6 +59,7 @@ class Config:
             "stall_timeout": self.stall_timeout,
             "max_file_kb": self.max_file_kb,
             "quota_cooldown_hours": self.quota_cooldown_hours,
+            "worktree_copy": self.worktree_copy,
             "scope": self.scope,
             "prefer": self.prefer,
         }
@@ -74,6 +78,7 @@ def load(root: Path) -> Config:
         stall_timeout=int(data.get("stall_timeout", base.stall_timeout)),
         max_file_kb=int(data.get("max_file_kb", base.max_file_kb)),
         quota_cooldown_hours=float(data.get("quota_cooldown_hours", base.quota_cooldown_hours)),
+        worktree_copy=list(data.get("worktree_copy", [])),
         scope=list(data.get("scope", [])),
         prefer=dict(data.get("prefer", {})),
     )

@@ -163,10 +163,13 @@ passed the hidden set, files stayed in scope. What it taught:
 The executor is OpenCode; the provider only supplies the model, so any provider OpenCode
 connects to can be tried with the same denies, checks and branches.
 
-- **The free quota is per account.** Nine delegations (~60 min of executor time) fit into
-  OpenCode Zen's free quota; then `beam-free` stopped mid-task with "Free usage limit
-  reached" and every other free model refused within seconds. It came back hours later,
-  for one request. OpenRouter's free tier ended the same way ("Rate limit exceeded:
+- **The free quota covers all models at once, and for Zen it is most likely per IP.**
+  Nine delegations (~60 min of executor time) fit into OpenCode Zen's free quota; then
+  `beam-free` stopped mid-task with "Free usage limit reached" and every other free model
+  refused within seconds. It came back hours later, for one request. Zen was used without
+  any login (`opencode auth list` was empty), so the limit cannot be per account: a friend
+  behind the same VPN exit hit it at once without using OpenCode. Everyone sharing an
+  exit IP shares the quota; the kit's runs use it up for them too. OpenRouter's free tier ended the same way ("Rate limit exceeded:
   free-models-per-day"), Google AI Studio's Pro model had none ("exceeded your current
   quota").
 - **Groq's free tier cannot drive an agent.** One-file probes passed, but the first real
@@ -220,6 +223,16 @@ and every one was checked by mutation.
   delegation; the difference (steps, tokens, cost) goes into the verdict and the history.
   Unreadable or shrinking totals give "unknown", never a guess. Two delegations running in
   one project at once would share the difference.
+
+- **Working copies (`slots`)**: every writing delegation runs in its own git worktree
+  `.offload/state/worktrees/slot-N`, so the person's tree is never checked out and
+  delegations run in parallel. Slots are reused so ignored build output stays warm;
+  `checkout -f` + `clean -fd` (no `-x`) reset everything else. A lock file per slot, taken
+  over when older than the longest possible run. `worktree_copy` copies git-ignored files a
+  build needs (an Android `local.properties`). Read-only roles with `--on BRANCH` look at a
+  branch in a detached slot: that is how a free model does the first review. Live on
+  2026-10-30: a Kotlin and a Rust task ran in two slots at once (4 and 3 minutes), the main
+  tree stayed clean throughout.
 
 ## Measuring the saving
 

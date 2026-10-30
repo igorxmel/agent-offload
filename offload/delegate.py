@@ -8,8 +8,9 @@ The flow, and why:
 
 1. Preconditions fail loudly *before* anything runs: a dirty tree would make the
    diff unattributable, and no check command means a junk generator.
-2. Work happens on a scratch branch `offload/...`. The person's tree is never
-   touched, and the original branch is checked out again at the end.
+2. Work happens on a scratch branch `offload/...`, checked out in a separate
+   working copy (see `slots`). The person's tree is never touched, and several
+   delegations can run at once.
 3. Infrastructure failures (timeout, stall, provider error, empty answer) retry
    on the next acceptable model. A failed *check* does not: that is a quality
    verdict, and it goes to the orchestrator. An exhausted quota skips the rest of
@@ -22,11 +23,12 @@ from __future__ import annotations
 
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from offload import (
-    checks, config, discover, gitops, history, opencode, paths, quota, report, select,
+    checks, config, discover, gitops, history, opencode, paths, quota, report, select, slots,
 )
 
 # Exit codes. 0 passed; 3 the check failed or nothing changed; 4 every executor
@@ -43,6 +45,8 @@ PROTECTED_PREFIXES = (".offload/", ".opencode/")
 PROTECTED_FILES = ("opencode.json", "opencode.jsonc", "AGENTS.md", "CLAUDE.md")
 IGNORED_PREFIXES = (".offload/state/",)
 READ_ONLY = ("explore", "plan", "review")
+# Characters of a read-only role's answer kept in the verdict.
+ANSWER_LIMIT = 6000
 
 
 class DelegateError(Exception):
@@ -166,6 +170,18 @@ def _resume_tip(root: Path, resume: str | None, role: str) -> str | None:
     return tip
 
 
+def _on_tip(root: Path, on: str | None, role: str) -> str | None:
+    """Commit of an existing branch for a read-only role to look at."""
+    if not on:
+        return None
+    if role not in READ_ONLY:
+        raise DelegateError("--on is for read-only roles; to change a branch use --resume")
+    tip = gitops.branch_tip(root, on)
+    if not tip:
+        raise DelegateError(f"no such branch: {on}")
+    return tip
+
+
 def _candidates(root, snapshot, role: str, model: str | None, skip: set[str]) -> list[str]:
     """Every model that may be tried, best first, without providers whose quota is
     exhausted. The attempt limit is applied while trying, not here: a quota stop
@@ -203,6 +219,7 @@ def delegate(
     scope: list[str] | None = None,
     holdout_cmd: str | None = None,
     resume: str | None = None,
+    on: str | None = None,
     snapshot=None,
     executor=opencode.run_agent,
     now=time.time,
@@ -212,6 +229,7 @@ def delegate(
     cfg = config.load(root)
     verify = _preflight(root, cfg, verify_cmd, role)
     resume_tip = _resume_tip(root, resume, role)
+    on_tip = _on_tip(root, on, role)
     fresh = snapshot is None
     snapshot = snapshot or discover.discover(root)
     if model and fresh and model not in {e.id for e in snapshot.entries}:
@@ -220,35 +238,59 @@ def delegate(
     skip = quota.exhausted(root, cfg.quota_cooldown_hours)
     candidates = _candidates(root, snapshot, role, model, skip)
 
-    origin = gitops.current_ref(root)
     base = resume_tip or gitops.head(root)
-    branch = f"offload/{_slug(task)}-{int(now())}"
-
-    task_file = paths.state_dir(root) / "tasks" / f"{int(now())}.md"
-    task_file.parent.mkdir(parents=True, exist_ok=True)
-    intro = (
-        "The work from an earlier attempt is already in this project. Do not redo it: fix "
-        "only the discrepancies listed below, then stop.\n\n" if resume_tip else ""
-    )
-    task_file.write_text(
-        f"{intro}{task.strip()}\n\nCheck command (the orchestrator runs it itself; "
-        f"do not skip it): {verify}\n"
-        "Work only inside this project. Install nothing: if a dependency is missing, "
-        "put it in BLOCKERS.\n",
-        encoding="utf-8",
-    )
-    relative_task = task_file.relative_to(root).as_posix()
-
+    stamp = f"{int(now())}-{uuid.uuid4().hex[:6]}"  # unique even for two runs in one second
+    branch = f"offload/{_slug(task)}-{stamp}"
     writes = role not in READ_ONLY
+
+    review_range = ""
+    if on_tip:
+        # A read-only look at existing work: a slot detached at that branch's tip.
+        review_range = f"{gitops.merge_base(root, gitops.head(root), on_tip)[:12]}..HEAD"
+        base = on_tip
+    slot = None
+    if writes or on_tip:
+        try:
+            slot = slots.acquire(
+                root, base, branch if writes else None,
+                stale_after=cfg.executor_timeout * max_attempts + 2 * cfg.verify_timeout + 600,
+                copy=cfg.worktree_copy,
+            )
+        except slots.NoFreeSlot as error:
+            raise DelegateError(f"{error}; wait for a running delegation to finish", 4) from error
+    # Where the executor works and the check runs. Kit state (history, quota,
+    # caches) stays in `root`.
+    work = slot.path if slot else root
+
     verdict = Verdict(
         status="executor_error", role=role, branch=branch if writes else "", base=base[:12]
     )
-    if writes:
-        gitops.create_branch(root, branch, start=resume_tip)
     keep_branch = False
     usage_reader = usage_reader or opencode.usage
-    usage_before = usage_reader(root)
+    usage_before = None
     try:
+        # Inside `try`: whatever fails from here on, the slot is released.
+        usage_before = usage_reader(root)
+        task_file = paths.state_dir(work) / "tasks" / f"{stamp}.md"
+        task_file.parent.mkdir(parents=True, exist_ok=True)
+        intro = (
+            "The work from an earlier attempt is already in this project. Do not redo it: fix "
+            "only the discrepancies listed below, then stop.\n\n" if resume_tip else ""
+        )
+        if review_range:
+            intro = (
+                f"The changes to look at are `git diff {review_range}` in this project "
+                "(read the full files where the diff is not enough).\n\n"
+            )
+        task_file.write_text(
+            f"{intro}{task.strip()}\n\nCheck command (the orchestrator runs it itself; "
+            f"do not skip it): {verify}\n"
+            "Work only inside this project. Install nothing: if a dependency is missing, "
+            "put it in BLOCKERS.\n",
+            encoding="utf-8",
+        )
+        relative_task = task_file.relative_to(work).as_posix()
+
         result = None
         # Quota stops do not count: they take seconds and say nothing about the model.
         spent = 0
@@ -258,7 +300,7 @@ def delegate(
             if quota.provider(candidate) in skip and candidate != model:
                 continue  # an earlier attempt in this run exhausted this provider
             result = executor(
-                root, f"offload-{role}", candidate, MESSAGE, Path(relative_task),
+                work, f"offload-{role}", candidate, MESSAGE, Path(relative_task),
                 cfg.executor_timeout, cfg.stall_timeout,
             )
             outcome, detail = _classify(result)
@@ -272,9 +314,9 @@ def delegate(
             else:
                 spent += 1
             if writes:
-                # A failed attempt must leave no trace. Only ever on our own scratch
-                # branch: a hard reset on the person's branch would destroy their work.
-                gitops.discard_changes(root, base)
+                # A failed attempt must leave no trace. Only ever in our own slot:
+                # a hard reset in the person's tree would destroy their work.
+                gitops.discard_changes(work, base)
         else:
             if verdict.attempts and all(a.outcome == "quota" for a in verdict.attempts):
                 verdict.status = "quota"
@@ -288,11 +330,17 @@ def delegate(
 
         verdict.report = report.parse(result.stdout)
         verdict.report_ok = report.is_well_formed(verdict.report)
-        if not verdict.report_ok:
+        if not writes:
+            # Read-only roles answer in their own shape (findings, a plan, a summary):
+            # the answer is the result, so it is passed on whole, not as a report.
+            verdict.report = {"ANSWER": report.clip(report.strip_ansi(result.stdout).strip(),
+                                                     ANSWER_LIMIT)}
+            verdict.report_ok = True
+        elif not verdict.report_ok:
             verdict.notes.append("executor did not follow the report format")
             verdict.report = {"RAW": report.clip(report.strip_ansi(result.stdout), 800)}
 
-        files = _relevant(gitops.changed_paths(root))
+        files = _relevant(gitops.changed_paths(work))
         verdict.files = files
 
         touched = _tampered(files)
@@ -300,7 +348,7 @@ def delegate(
             verdict.status = "tampered"
             verdict.files = files
             if writes:
-                gitops.discard_changes(root, base)
+                gitops.discard_changes(work, base)
                 verdict.files = []
                 verdict.notes.append(f"executor changed its own limits, work discarded: {touched}")
             else:
@@ -323,15 +371,15 @@ def delegate(
             # scope, and discarding them here would hide an attempt to edit them.
             stray = [f for f in files if not _in_scope(f, limit)]
             if stray:
-                gitops.discard_paths(root, stray)
+                gitops.discard_paths(work, stray)
                 files = [f for f in files if f not in stray]
                 verdict.files = files
                 shown = ", ".join(stray[:6]) + (" ..." if len(stray) > 6 else "")
                 verdict.notes.append(f"out of scope, discarded ({len(stray)}): {shown}")
 
-        big = _oversized(root, files, cfg.max_file_kb)
+        big = _oversized(work, files, cfg.max_file_kb)
         if big:
-            gitops.discard_paths(root, big)
+            gitops.discard_paths(work, big)
             files = [f for f in files if f not in big]
             verdict.files = files
             verdict.notes.append(
@@ -342,18 +390,18 @@ def delegate(
             verdict.status = "no_changes"
             return verdict
 
-        gitops.commit_all(root, f"offload({role}): {task.strip().splitlines()[0][:60]}")
+        gitops.commit_all(work, f"offload({role}): {task.strip().splitlines()[0][:60]}")
         keep_branch = True
-        verdict.diffstat = gitops.shortstat(root, base, "HEAD")
+        verdict.diffstat = gitops.shortstat(work, base, "HEAD")
 
-        outcome = checks.run(root, verify, cfg.verify_timeout)
+        outcome = checks.run(work, verify, cfg.verify_timeout)
         verdict.verify = outcome.to_dict()
         verdict.status = "passed" if outcome.passed else "failed"
 
         if holdout_cmd and outcome.passed:
             # Never written to the task file or to disk: the executor must not be able
             # to read it. Run only on a green check; a red one already decides the verdict.
-            held = checks.run(root, holdout_cmd, cfg.verify_timeout)
+            held = checks.run(work, holdout_cmd, cfg.verify_timeout)
             verdict.holdout = held.to_dict()
             if not held.passed:
                 verdict.status = "failed"
@@ -363,10 +411,9 @@ def delegate(
                 )
         return verdict
     finally:
-        if writes:
-            gitops.checkout(root, origin)
-            if not keep_branch:
-                gitops.delete_branch(root, branch)
+        if slot:
+            slots.release(root, slot, branch if writes else None, keep_branch)
+            if writes and not keep_branch:
                 verdict.branch = ""
         verdict.seconds = time.monotonic() - started
         verdict.usage = opencode.usage_delta(usage_before, usage_reader(root))
