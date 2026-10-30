@@ -326,7 +326,7 @@ def delegate(
                 skip.add(quota.provider(candidate))
             else:
                 spent += 1
-            if writes and outcome in ("timeout", "stall"):
+            if writes and outcome in ("timeout", "stall", "quota"):
                 kept = _keep_partial(work, branch, len(verdict.partial) + 1, scope or cfg.scope,
                                      cfg.max_file_kb, candidate, outcome)
                 if kept:

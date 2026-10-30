@@ -60,6 +60,20 @@ def test_timeout_keeps_work_too_but_a_plain_error_does_not(tmp_path) -> None:
     assert plain.partial == []
 
 
+def test_work_done_before_a_quota_stop_is_kept(tmp_path) -> None:
+    # Seen live: a model worked ~10 minutes, then "Daily limit reached" threw it away.
+    root = make_repo(tmp_path)
+
+    def worked_then_quota(work, *a):
+        (Path(work) / "half.txt").write_text("half\n", encoding="utf-8")
+        return AgentResult(1, "", "Error: Daily limit reached for x/y:free (limit_rpd)", 640.0)
+
+    verdict = delegate.delegate(root, "x", snapshot=snapshot("x/y:free"),
+                                executor=worked_then_quota)
+    assert verdict.status == "quota" and len(verdict.partial) == 1
+    assert "half.txt" in gitops.git(root, "ls-tree", "-r", "--name-only", verdict.partial[0])
+
+
 def test_partial_work_obeys_scope_size_and_tamper_rules(tmp_path) -> None:
     root = make_repo(tmp_path)
     scoped = delegate.delegate(root, "x", snapshot=snapshot("p/m1"), scope=["src"],

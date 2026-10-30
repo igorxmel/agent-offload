@@ -25,6 +25,8 @@ QUOTA_PATTERNS = (
     r"exceeded your current quota",  # Google AI Studio
     r"quota exceeded",
     r"free-models-per-day",  # OpenRouter: "Rate limit exceeded: free-models-per-day"
+    r"daily limit reached",  # OpenRouter, per model: "Daily limit reached for <model>"
+    r"\blimit_rpd\b",  # the same, as the provider's error code
     r"insufficient (credits|quota|balance)",
 )
 _QUOTA = re.compile("|".join(QUOTA_PATTERNS), re.IGNORECASE)

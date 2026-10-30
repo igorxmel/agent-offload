@@ -150,6 +150,7 @@ def test_quota_messages_seen_in_the_wild_are_recognised() -> None:
         "Error: Free usage limit reached. Connect a provider or subscribe to OpenCode Go",
         "Error: Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000",
         "Error: You exceeded your current quota, please check your plan and billing details.",
+        "Error: Daily limit reached for thinkingmachines/inkling:free (limit_rpd)",
     ):
         assert quota.is_quota(text), text
     # Too large a request is not an exhausted quota: waiting does not help it.

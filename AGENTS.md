@@ -273,6 +273,24 @@ grows with the size of the implementation relative to the orchestrator's reading
 review, and it is eaten by every extra turn the orchestrator spends waiting or reviewing.
 One run per arm: indicative, not a benchmark.
 
+### Arm C (2026-10-30 evening): parallel slots, stopped by quota
+
+The same task with the improved kit (two delegations at once, `--task-file`, free review
+planned). It produced no measurement: both delegations ran `inkling:free` in parallel for
+~640 s, then OpenRouter answered "Daily limit reached ... (limit_rpd)" and every other free
+provider was already out of quota. What it taught:
+
+- **The free budget is the bottleneck now, not the kit.** One medium task used about a
+  day of OpenRouter's free requests; running two delegations on the same free model spends
+  that budget twice as fast. Spread parallel delegations over different providers when
+  there is a choice.
+- "Daily limit reached" / `limit_rpd` was not recognised as a quota (fixed), and the ~10
+  minutes of work done before it were thrown away (fixed: kept on a `-partial-N` branch,
+  like a timeout or a stall).
+- **Executor usage is per project, not per delegation.** `opencode stats` has no
+  per-run filter the kit can use, so two delegations running at once each report the
+  combined usage of both. Read it as an upper bound when runs overlap.
+
 ## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is
