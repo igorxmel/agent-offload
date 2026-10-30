@@ -256,7 +256,7 @@ def test_oversized_files_are_discarded_and_reported(tmp_path) -> None:
     assert verdict.status == "passed" and verdict.files == ["new.txt"]
     assert any("larger than 4 KB" in note for note in verdict.notes)
     tree = subprocess.run(["git", "-C", str(root), "ls-tree", "-r", "--name-only", verdict.branch],
-                          capture_output=True, text=True).stdout
+                          check=False, capture_output=True, text=True).stdout
     assert "hprof" not in tree
 
 

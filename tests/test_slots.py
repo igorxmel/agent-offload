@@ -95,7 +95,7 @@ def test_slot_is_reused_with_ignored_build_output_kept_warm(tmp_path) -> None:
     assert "crash-junk.txt" not in second.files
     assert works[0] == works[1]
     assert (works[1] / "target" / "built.bin").exists()  # ignored output survived
-    tree = lambda v: gitops.git(root, "ls-tree", "-r", "--name-only", v.branch)  # noqa: E731
+    tree = lambda v: gitops.git(root, "ls-tree", "-r", "--name-only", v.branch)
     assert "leftover.txt" in tree(first)
     assert "leftover.txt" not in tree(second)  # the slot was reset to the base in between
 

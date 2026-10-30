@@ -116,6 +116,8 @@ def _format_verdict(v) -> str:
             f"${u['cost']:g}"
         )
     lines.extend(f"note: {note}" for note in v.notes)
+    for side in v.partial:
+        lines.append(f"partial (unverified): {side}")
     if v.branch and v.status == "passed":
         lines.append(f"merge: git merge {v.branch}   discard: git branch -D {v.branch}")
     return "\n".join(lines)

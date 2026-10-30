@@ -44,7 +44,7 @@ def prices(text: str, model_ids: list[str]) -> dict[str, list[float]]:
     """
     catalog = json.loads(text)
     if not isinstance(catalog, dict):
-        raise ValueError("catalog is not a JSON object")
+        raise TypeError("catalog is not a JSON object")
     found: dict[str, list[float]] = {}
     for model_id in model_ids:
         provider, _, name = model_id.partition("/")

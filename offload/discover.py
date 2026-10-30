@@ -12,8 +12,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from offload import config as config_mod
 from offload import catalog, jsonio, opencode, paths, policy, privacy
+from offload import config as config_mod
 
 
 @dataclass

@@ -28,7 +28,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from offload import (
-    checks, config, discover, gitops, history, opencode, paths, quota, report, select, slots,
+    checks,
+    config,
+    discover,
+    gitops,
+    history,
+    opencode,
+    paths,
+    quota,
+    report,
+    select,
+    slots,
 )
 
 # Exit codes. 0 passed; 3 the check failed or nothing changed; 4 every executor
@@ -81,6 +91,8 @@ class Verdict:
     report_ok: bool = False
     notes: list[str] = field(default_factory=list)
     seconds: float = 0.0
+    # Unverified work kept from attempts that timed out or stalled (branch names).
+    partial: list[str] = field(default_factory=list)
     # What the executor spent across all attempts (`opencode.USAGE_FIELDS`), or
     # None when OpenCode's statistics could not be read.
     usage: dict | None = None
@@ -106,6 +118,7 @@ class Verdict:
             "notes": self.notes,
             "seconds": round(self.seconds, 1),
             "executor_usage": self.usage,
+            "partial": self.partial,
         }
 
 
@@ -313,6 +326,15 @@ def delegate(
                 skip.add(quota.provider(candidate))
             else:
                 spent += 1
+            if writes and outcome in ("timeout", "stall"):
+                kept = _keep_partial(work, branch, len(verdict.partial) + 1, scope or cfg.scope,
+                                     cfg.max_file_kb, candidate, outcome)
+                if kept:
+                    verdict.partial.append(kept)
+                    verdict.notes.append(
+                        f"{candidate} {outcome}: its unverified work is kept on {kept}; "
+                        f"continue it with --resume {kept}"
+                    )
             if writes:
                 # A failed attempt must leave no trace. Only ever in our own slot:
                 # a hard reset in the person's tree would destroy their work.
@@ -418,6 +440,37 @@ def delegate(
         verdict.seconds = time.monotonic() - started
         verdict.usage = opencode.usage_delta(usage_before, usage_reader(root))
         _record(root, verdict, role)
+
+
+def _keep_partial(
+    work: Path, branch: str, number: int, scope: list[str], max_file_kb: int,
+    model: str, outcome: str,
+) -> str:
+    """Commits what a killed attempt left on a side branch; returns its name or "".
+
+    The same filters as for finished work apply first: nothing that touches the
+    kit's own limits is kept at all, and out-of-scope or oversized files are
+    dropped. The scratch branch itself is left at its base for the next attempt.
+    """
+    files = _relevant(gitops.changed_paths(work))
+    if not files or _tampered(files):
+        return ""
+    drop = [f for f in files if scope and not _in_scope(f, scope)]
+    drop += _oversized(work, [f for f in files if f not in drop], max_file_kb)
+    if drop:
+        gitops.discard_paths(work, drop)
+    if len(drop) == len(files):
+        return ""
+    side = f"{branch}-partial-{number}"
+    gitops.git(work, "checkout", "-q", "-b", side)
+    committed = gitops.commit_all(
+        work, f"offload(partial): unverified work of {model} before {outcome}"
+    )
+    gitops.git(work, "checkout", "-q", "-f", branch)
+    if not committed:
+        gitops.delete_branch(work, side)
+        return ""
+    return side
 
 
 def _oversized(root: Path, files: list[str], limit_kb: int) -> list[str]:
