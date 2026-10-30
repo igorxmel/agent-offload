@@ -47,6 +47,8 @@ An executor that prints nothing for `stall_timeout` seconds (default 600) is kil
 next model tried: a provider that stops answering would otherwise hold the run until
 `executor_timeout`. Files larger than `max_file_kb` (default 5 MB) are discarded and
 reported - one executor committed a 380 MB heap dump.
+The verdict also says what the executor spent (steps, tokens, cost), read from
+`opencode stats` before and after the run; it is kept in the history next to the result.
 
 | Exit | Meaning |
 |---|---|

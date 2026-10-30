@@ -216,6 +216,22 @@ and every one was checked by mutation.
 - **`PWD`**: see "Verified behaviour" above.
 - An explicit `--model` missing from the cached snapshot (a provider connected after the
   last `discover`) triggers one refresh instead of "unknown model".
+- **Executor usage**: `opencode stats --project . --all --json` before and after a
+  delegation; the difference (steps, tokens, cost) goes into the verdict and the history.
+  Unreadable or shrinking totals give "unknown", never a guess. Two delegations running in
+  one project at once would share the difference.
+
+## Measuring the saving
+
+The orchestrator's side cannot be read by the kit (any orchestrator may drive it). For
+Claude Code it is in the session transcript, `~/.claude/projects/<dir>/<session>.jsonl`:
+each response carries `usage` (input, cache write, cache read, output); count each message
+id once. Over the whole todo-sync experiment (2026-10-29/30) the orchestrator spent 228k
+output tokens and 101M cache reads in 336 responses, the executors 155k output + 170k
+reasoning tokens and 39M cache reads in 769 steps. That run is not a fair measure: it
+included toolchain setup and provider research, and most of the orchestrator's cost was
+re-reading a long session context. A fair one is an A/B on one task in fresh sessions:
+the orchestrator alone versus the orchestrator with the kit.
 
 ## Language
 

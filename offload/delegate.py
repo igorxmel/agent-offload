@@ -77,6 +77,9 @@ class Verdict:
     report_ok: bool = False
     notes: list[str] = field(default_factory=list)
     seconds: float = 0.0
+    # What the executor spent across all attempts (`opencode.USAGE_FIELDS`), or
+    # None when OpenCode's statistics could not be read.
+    usage: dict | None = None
 
     @property
     def exit_code(self) -> int:
@@ -98,6 +101,7 @@ class Verdict:
             "attempts": [vars(a) for a in self.attempts],
             "notes": self.notes,
             "seconds": round(self.seconds, 1),
+            "executor_usage": self.usage,
         }
 
 
@@ -202,6 +206,7 @@ def delegate(
     snapshot=None,
     executor=opencode.run_agent,
     now=time.time,
+    usage_reader=None,
 ) -> Verdict:
     started = time.monotonic()
     cfg = config.load(root)
@@ -241,6 +246,8 @@ def delegate(
     if writes:
         gitops.create_branch(root, branch, start=resume_tip)
     keep_branch = False
+    usage_reader = usage_reader or opencode.usage
+    usage_before = usage_reader(root)
     try:
         result = None
         # Quota stops do not count: they take seconds and say nothing about the model.
@@ -362,6 +369,7 @@ def delegate(
                 gitops.delete_branch(root, branch)
                 verdict.branch = ""
         verdict.seconds = time.monotonic() - started
+        verdict.usage = opencode.usage_delta(usage_before, usage_reader(root))
         _record(root, verdict, role)
 
 
@@ -403,5 +411,5 @@ def _record(root: Path, verdict: Verdict, role: str) -> None:
     if verdict.model:
         history.record(
             root, verdict.model, role, verdict.status == "passed",
-            verdict.seconds, outcome=verdict.status,
+            verdict.seconds, outcome=verdict.status, usage=verdict.usage,
         )

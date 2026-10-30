@@ -263,6 +263,44 @@ def test_oversized_files_are_discarded_and_reported(tmp_path) -> None:
 # --- explicit model after a new provider -----------------------------------------------
 
 
+def _totals(steps, inp, out, cost):
+    return {"steps": steps, "input": inp, "output": out, "reasoning": 0, "cache_read": 0,
+            "cost": cost}
+
+
+def test_executor_usage_is_the_difference_across_the_whole_run(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    readings = iter([_totals(10, 1000, 100, 0.0), _totals(25, 4000, 900, 0.0)])
+    verdict = delegate.delegate(root, "create new.txt", snapshot=snapshot("p/m1"),
+                                executor=writer({"new.txt": "x\n"}),
+                                usage_reader=lambda r: next(readings))
+    assert verdict.usage == {"steps": 15, "input": 3000, "output": 800, "reasoning": 0,
+                             "cache_read": 0, "cost": 0.0}
+    assert verdict.to_dict()["executor_usage"]["input"] == 3000
+    assert history.load(root)[-1]["usage"]["output"] == 800
+
+
+def test_unreadable_or_shrinking_usage_is_reported_as_unknown(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    readings = iter([None, _totals(1, 1, 1, 0)])
+    verdict = delegate.delegate(root, "create new.txt", snapshot=snapshot("p/m1"),
+                                executor=writer({"new.txt": "x\n"}),
+                                usage_reader=lambda r: next(readings))
+    assert verdict.status == "passed" and verdict.usage is None
+    assert opencode.usage_delta(_totals(5, 5, 5, 0), _totals(3, 9, 9, 0)) is None
+
+
+def test_usage_parses_opencode_stats_and_rejects_odd_shapes(monkeypatch, tmp_path) -> None:
+    stats = {"steps": 7, "tokens": {"input": 10, "output": 2, "reasoning": 1,
+                                    "cache": {"read": 50, "write": 0}}, "cost": 0}
+    monkeypatch.undo()  # the autouse fixture replaced `usage`; this test needs the real one
+    monkeypatch.setattr(opencode, "run", lambda *a, **k: json.dumps(stats))
+    assert opencode.usage(tmp_path) == {"steps": 7, "input": 10, "output": 2, "reasoning": 1,
+                                        "cache_read": 50, "cost": 0}
+    stats["tokens"]["input"] = "lots"
+    assert opencode.usage(tmp_path) is None
+
+
 def test_explicit_model_missing_from_cache_triggers_one_refresh(tmp_path, monkeypatch) -> None:
     root = make_repo(tmp_path)
     calls = []

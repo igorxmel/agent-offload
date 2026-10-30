@@ -7,6 +7,7 @@ the model list - and both fail with a clear message.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import signal
@@ -30,10 +31,13 @@ def find() -> str:
     return path
 
 
-def run(args: list[str], timeout: int = 60) -> str:
+def run(args: list[str], timeout: int = 60, root: Path | None = None) -> str:
+    """Runs an `opencode` command; with `root`, inside that project (see `agent_env`)."""
+    where = {"cwd": root, "env": agent_env(root)} if root else {}
     try:
         result = subprocess.run(
             [find(), *args],
+            **where,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -57,6 +61,44 @@ def models() -> list[str]:
     """Model identifiers as `provider/model`."""
     lines = (line.strip() for line in run(["models"]).splitlines())
     return [line for line in lines if line and "/" in line and " " not in line]
+
+
+USAGE_FIELDS = ("steps", "input", "output", "reasoning", "cache_read", "cost")
+
+
+def usage(root: Path) -> dict[str, float] | None:
+    """Lifetime executor totals for this project, as `opencode stats` counts them.
+
+    The kit takes this before and after a delegation; the difference is what the
+    executor spent. None when the numbers cannot be read: usage is reported, never
+    relied on, so a missing number must not stop a delegation.
+    """
+    try:
+        data = json.loads(run(["stats", "--project", ".", "--all", "--json"], timeout=60, root=root))
+        tokens = data.get("tokens") or {}
+        values = {
+            "steps": data.get("steps"),
+            "input": tokens.get("input"),
+            "output": tokens.get("output"),
+            "reasoning": tokens.get("reasoning"),
+            "cache_read": (tokens.get("cache") or {}).get("read"),
+            "cost": data.get("cost"),
+        }
+    except (OpenCodeError, OSError, ValueError, AttributeError):
+        return None
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values.values()):
+        return None
+    return values
+
+
+def usage_delta(before: dict | None, after: dict | None) -> dict[str, float] | None:
+    if before is None or after is None:
+        return None
+    delta = {k: after[k] - before[k] for k in USAGE_FIELDS}
+    if any(v < 0 for v in delta.values()):
+        return None  # history pruned or another project: the difference means nothing
+    delta["cost"] = round(delta["cost"], 4)
+    return delta
 
 
 @dataclass

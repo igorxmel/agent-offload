@@ -108,6 +108,13 @@ def _format_verdict(v) -> str:
     for attempt in v.attempts:
         if attempt.outcome != "ok":
             lines.append(f"attempt {attempt.model}: {attempt.outcome} {attempt.detail}")
+    if v.usage:
+        u = v.usage
+        lines.append(
+            f"executor spent: {u['steps']:.0f} steps, {u['input']:.0f} in / {u['output']:.0f} out / "
+            f"{u['reasoning']:.0f} reasoning tokens, {u['cache_read']:.0f} from cache, "
+            f"${u['cost']:g}"
+        )
     lines.extend(f"note: {note}" for note in v.notes)
     if v.branch and v.status == "passed":
         lines.append(f"merge: git merge {v.branch}   discard: git branch -D {v.branch}")
