@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="1" stop-color="#141b33"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c9cff"/>
+      <stop offset="1" stop-color="#4fe3c1"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.82" cy="0.25" r="0.6">
+      <stop offset="0" stop-color="#4fe3c1" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#4fe3c1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <g stroke="#ffffff" stroke-opacity="0.04">
+    <path d="M0 160H1280M0 320H1280M0 480H1280M320 0V640M640 0V640M960 0V640"/>
+  </g>
+
+  <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+    <text x="80" y="200" font-size="22" font-weight="600" fill="#7c9cff" letter-spacing="4">FREE MODELS TYPE. YOU DECIDE.</text>
+    <text x="78" y="282" font-size="82" font-weight="800" fill="#ffffff">agent-offload</text>
+    <rect x="80" y="314" width="132" height="6" rx="3" fill="url(#accent)"/>
+    <text x="80" y="370" font-size="25" fill="#c7cfe8">Hand bulk coding work from Claude, Codex</text>
+    <text x="80" y="404" font-size="25" fill="#c7cfe8">or any agent to free models - behind a</text>
+    <text x="80" y="438" font-size="25" fill="#c7cfe8">check they can't fake.</text>
+    <g font-size="19" fill="#8f9ac0">
+      <rect x="80" y="476" width="168" height="40" rx="20" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.12"/>
+      <text x="164" y="502" text-anchor="middle">hidden checks</text>
+      <rect x="260" y="476" width="168" height="40" rx="20" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.12"/>
+      <text x="344" y="502" text-anchor="middle">parallel slots</text>
+      <rect x="440" y="476" width="148" height="40" rx="20" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.12"/>
+      <text x="514" y="502" text-anchor="middle">$0 executor</text>
+    </g>
+    <text x="80" y="590" font-size="20" fill="#5d6890">github.com/igorxmel/agent-offload</text>
+  </g>
+
+  <g transform="translate(700 150)">
+    <rect width="500" height="340" rx="16" fill="#0a0e1a" stroke="#ffffff" stroke-opacity="0.12"/>
+    <rect width="500" height="44" rx="16" fill="#ffffff" fill-opacity="0.04"/>
+    <rect y="28" width="500" height="16" fill="#0a0e1a"/>
+    <circle cx="26" cy="22" r="7" fill="#ff5f57"/>
+    <circle cx="50" cy="22" r="7" fill="#febc2e"/>
+    <circle cx="74" cy="22" r="7" fill="#28c840"/>
+    <g font-family="Consolas, Menlo, monospace" font-size="17" xml:space="preserve" style="white-space:pre">
+      <text x="24" y="86" fill="#8f9ac0">$ offload delegate --scope kotlin</text>
+      <text x="24" y="124" fill="#4fe3c1" font-weight="700">PASSED</text>
+      <text x="104" y="124" fill="#c7cfe8">inkling:free  851s</text>
+      <text x="24" y="156" fill="#c7cfe8">branch  offload/implement-protocol-md-...</text>
+      <text x="24" y="188" fill="#c7cfe8">diff    6 files, +209 -19</text>
+      <text x="24" y="220" fill="#c7cfe8">check   <tspan fill="#4fe3c1">PASSED</tspan>  (run by the kit)</text>
+      <text x="24" y="252" fill="#c7cfe8">spent   93 steps, 0 dollars</text>
+      <text x="24" y="300" fill="#7c9cff">merge: git merge offload/implement-...</text>
+    </g>
+  </g>
+</svg>

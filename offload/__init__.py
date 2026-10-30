@@ -5,4 +5,4 @@ command) sets the goal; the executor writes the code. What comes back to the
 orchestrator is a short verdict from a machine check, not two hundred lines.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

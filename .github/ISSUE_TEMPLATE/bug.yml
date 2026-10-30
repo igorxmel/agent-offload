@@ -1,0 +1,24 @@
+name: Bug
+description: Something the kit did wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran and the verdict or error you got (`--json` output helps).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "`offload --version`, `opencode --version`, OS"
+    validations:
+      required: true

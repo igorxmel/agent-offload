@@ -1,0 +1,11 @@
+name: Idea or provider report
+description: A feature, or how a provider/model behaved as an executor
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What and why
+      description: For a provider or model, say what task it ran and what the verdict was.
+    validations:
+      required: true

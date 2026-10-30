@@ -1,6 +1,6 @@
 [project]
 name = "agent-offload"
-version = "0.1.0"
+version = "0.2.0"
 description = "Let any orchestrator agent delegate bulk work to OpenCode's free models, with privacy policy and machine-checked results"
 readme = "README.md"
 license = "MIT"

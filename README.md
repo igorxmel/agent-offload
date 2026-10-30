@@ -1,26 +1,39 @@
 <div align="center">
 
-# agent-offload
+<img src="docs/assets/banner.svg" alt="agent-offload: hand bulk coding work from Claude, Codex or any agent to free models, behind a check they can't fake" width="880">
+
+<br/>
+
+[![Release](https://img.shields.io/github/v/release/igorxmel/agent-offload?color=7c9cff)](https://github.com/igorxmel/agent-offload/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4fe3c1)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-7c9cff)
+![Dependencies](https://img.shields.io/badge/dependencies-0-4fe3c1)
+[![CI](https://github.com/igorxmel/agent-offload/actions/workflows/ci.yml/badge.svg)](https://github.com/igorxmel/agent-offload/actions/workflows/ci.yml)
+[![Works with OpenCode](https://img.shields.io/badge/executor-OpenCode-7c9cff)](https://opencode.ai)
 
 **Your expensive agent decides. Free models type. A check you trust says who was right.**
+
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Proof](#proof) ·
+[Guards](#guards-each-from-something-that-went-wrong) · [Commands](#commands) ·
+[Privacy](#privacy-and-cost)
+
+</div>
+
+<br/>
 
 Let Claude, Codex or any agent that can run a shell command hand bulk coding work to free
 models through [OpenCode](https://opencode.ai) - on a separate branch, in a separate
 working copy, behind a check the executor cannot fake.
 
-`Python 3.10+` · `no dependencies` · `MIT` · `any orchestrator` · `any OpenCode provider`
-
-</div>
-
 ```text
 $ offload delegate --scope kotlin --task-file due-dates.md
 PASSED  model=openrouter/thinkingmachines/inkling:free  role=build  851s
-branch: offload/kotlin-core-due-dates-1793342820-5cea11  (base 40b297f2a1c3)
-files: kotlin/core/src/main/kotlin/todo/Task.kt, kotlin/core/src/main/kotlin/todo/ListOrder.kt, ...
-diff: 6 files changed, 412 insertions(+), 18 deletions(-)
+branch: offload/implement-protocol-md-version-1793342820  (base 40b297f)
+files: kotlin/core/src/main/kotlin/todo/Task.kt, .../ListOrder.kt, .../Conform.kt, ...
+diff: 6 files changed, 209 insertions(+), 19 deletions(-)
 check [PASSED]: cd kotlin && .\gradlew.bat -q test installDist && app.bat conform ...
 executor spent: 93 steps, 95971 in / 10172 out / 13167 reasoning tokens, 5805952 from cache, $0
-merge: git merge offload/kotlin-core-due-dates-...   discard: git branch -D offload/...
+merge: git merge offload/implement-protocol-md-...   discard: git branch -D offload/...
 ```
 
 An abridged verdict from the A/B run below. Your agent reads those lines, not 400 lines
@@ -101,6 +114,12 @@ including what did not work, are in [AGENTS.md](AGENTS.md#measuring-the-saving).
 the executor never saw: a merge core in Rust and in Kotlin, UDP discovery and TCP sync on
 both, a Windows app and an Android app that sync over real Wi-Fi in 1-2 seconds.
 
+> [!IMPORTANT]
+> **The free budget is the real limit.** One medium task used about a day of OpenRouter's
+> free requests, and OpenCode Zen's free quota is shared by everyone behind one IP. The
+> kit survives running out (it stops cleanly and keeps the work done so far), but it
+> cannot make the budget bigger. Spread parallel delegations over different providers.
+
 ## Guards, each from something that went wrong
 
 | What happened | What the kit does now |
@@ -113,6 +132,8 @@ both, a Windows app and an Android app that sync over real Wi-Fi in 1-2 seconds.
 | Connecting OpenRouter listed 358 paid models as acceptable | only a listed price of zero passes; `offload allow groq/*` for free-tier keys |
 | OpenCode worked in the caller's folder, not the project | the executor's `PWD` is always the project |
 | An executor tried to edit its own limits | the work is discarded, exit 5 |
+| Ten minutes of work vanished when a daily limit hit | unverified work goes to `<branch>-partial-N`; continue with `--resume` |
+| A tiny model was tried first because it led the list | untried models are ordered by catalog facts: context size, then release date |
 
 ## Commands
 
@@ -161,6 +182,15 @@ access; it never opens it.
 - **No machine check.** Without `verify` the kit refuses to delegate, on purpose.
 - **When minutes matter.** Delegation trades the orchestrator's tokens for wall time.
 - **Secret code on free tiers.** Check what the policy allows before you loosen it.
+
+## Roadmap
+
+- [x] Hidden checks, scope, resume, quota and stall handling, paid-model filter
+- [x] Parallel delegations in worktree slots, free first review
+- [ ] Re-measure the A/B with parallel slots, and with a cheaper orchestrator model
+- [ ] [OmniRoute](https://github.com/cheaper-inference/OmniRoute) as a provider for
+      open-source projects, restricted to explicitly chosen free providers
+- [ ] Per-user model history instead of per-project
 
 ## Contributing
 
