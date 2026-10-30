@@ -73,13 +73,37 @@ def tool_use(text: str, model_ids: list[str]) -> dict[str, bool]:
     return found
 
 
+def meta(text: str, model_ids: list[str]) -> dict[str, dict]:
+    """`provider/model` -> {"context": tokens or None, "released": "YYYY-MM-DD" or None}.
+
+    Used only to order models nobody has measured yet (see `select`), never to
+    allow or deny one, so a missing value is simply None.
+    """
+    catalog = json.loads(text)
+    found: dict[str, dict] = {}
+    for model_id in model_ids:
+        provider, _, name = model_id.partition("/")
+        entry = (catalog.get(provider) or {}).get("models", {}).get(name) if name else None
+        if not isinstance(entry, dict):
+            continue
+        limit = entry.get("limit") if isinstance(entry.get("limit"), dict) else {}
+        context = limit.get("context")
+        released = entry.get("release_date")
+        found[model_id] = {
+            "context": context if isinstance(context, int) and not isinstance(context, bool)
+            else None,
+            "released": released if isinstance(released, str) else None,
+        }
+    return found
+
+
 def collect(
     url: str, model_ids: list[str], fetcher=fetch
-) -> tuple[dict[str, list[float]], dict[str, bool], str]:
-    """Prices and tool use, and a problem description when the catalog could not
-    be used."""
+) -> tuple[dict[str, list[float]], dict[str, bool], dict[str, dict], str]:
+    """Prices, tool use and ordering facts, and a problem description when the
+    catalog could not be used."""
     try:
         text = fetcher(url)
-        return prices(text, model_ids), tool_use(text, model_ids), ""
-    except Exception as error:  # noqa: BLE001 - any failure leaves both unknown
-        return {}, {}, f"{url}: {error}"
+        return prices(text, model_ids), tool_use(text, model_ids), meta(text, model_ids), ""
+    except Exception as error:  # noqa: BLE001 - any failure leaves all of it unknown
+        return {}, {}, {}, f"{url}: {error}"

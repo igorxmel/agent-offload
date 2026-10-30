@@ -47,6 +47,37 @@ def test_catalog_reads_tool_use_only_as_a_boolean() -> None:
     }
 
 
+def test_untried_models_are_ordered_by_catalog_facts_not_by_name(tmp_path) -> None:
+    from offload import select
+
+    def entry(model, context, released):
+        return discover.Entry(model, None, True, "ok", [0, 0],
+                              {"context": context, "released": released})
+
+    snap = discover.Snapshot(fetched_at=0, entries=[
+        entry("a/tiny", 65_536, "2026-09-01"),  # newest, but too small for an agent
+        entry("a/old", 1_000_000, "2025-10-17"),
+        entry("a/undated", 1_000_000, None),
+        entry("a/new-small", 200_000, "2026-10-05"),
+        entry("a/new-big", 1_000_000, "2026-10-05"),
+    ])
+    ranked = select.ranked(tmp_path, snap, "build")
+    assert [c.model for c in ranked] == ["a/new-big", "a/new-small", "a/old", "a/undated",
+                                         "a/tiny"]
+    assert {c.basis for c in ranked} == {"guess"}
+
+
+def test_catalog_meta_reads_context_and_release_date() -> None:
+    text = json.dumps({"p": {"models": {
+        "m": {"limit": {"context": 1000, "output": 10}, "release_date": "2026-01-02"},
+        "odd": {"limit": {"context": True}, "release_date": 5},
+    }}})
+    assert catalog.meta(text, ["p/m", "p/odd", "p/none"]) == {
+        "p/m": {"context": 1000, "released": "2026-01-02"},
+        "p/odd": {"context": None, "released": None},
+    }
+
+
 def test_manual_provider_wildcard_allows_a_free_tier_key() -> None:
     pol = policy.Policy.from_preset("open")
     pol.allowed.append("groq/*")

@@ -24,6 +24,8 @@ class Entry:
     reason: str
     # [input, output] dollars per million tokens; None when the catalog does not know.
     cost: list[float] | None = None
+    # {"context", "released"} from the catalog; orders untried models (see `select`).
+    meta: dict | None = None
 
 
 @dataclass
@@ -43,7 +45,7 @@ def _read_cache(root: Path, ttl_hours: int, now: float) -> dict | None:
     age_hours = (now - data.get("fetched_at", 0)) / 3600
     # A cache written before prices and tool use were collected is refreshed rather
     # than read as "every price unknown". Both keys are written together.
-    data["stale"] = age_hours > ttl_hours or "tools" not in data
+    data["stale"] = age_hours > ttl_hours or "meta" not in data
     return data
 
 
@@ -70,12 +72,13 @@ def _facts(
         rows = [privacy.Privacy(**row) for row in cached.get("privacy", [])]
         warnings.append("privacy table not retrieved; using previous data")
 
-    costs, tools, problem = catalog.collect(cfg.catalog, model_ids, price_fetcher)
+    costs, tools, facts, problem = catalog.collect(cfg.catalog, model_ids, price_fetcher)
     if problem:
         warnings.append(f"price catalog: {problem}")
         if cached:
             costs = {m: c for m, c in cached.get("costs", {}).items() if m in model_ids}
             tools = {m: t for m, t in cached.get("tools", {}).items() if m in model_ids}
+            facts = {m: f for m, f in cached.get("meta", {}).items() if m in model_ids}
             warnings.append("price catalog not retrieved; using previous prices")
 
     data = {
@@ -84,6 +87,7 @@ def _facts(
         "privacy": [row.to_dict() for row in rows],
         "costs": costs,
         "tools": tools,
+        "meta": facts,
     }
     jsonio.write(paths.discovery_file(root), data)
     return data, warnings
@@ -109,12 +113,14 @@ def discover(
     }
     costs = data.get("costs", {})
     tools = data.get("tools", {})
+    facts = data.get("meta", {})
     entries: list[Entry] = []
     for model_id in data.get("models", []):
         info = by_key.get(privacy.normalize(policy.short_id(model_id)))
         cost = costs.get(model_id)
         verdict = policy.evaluate(model_id, info, pol, cost=cost, tools=tools.get(model_id))
-        entries.append(Entry(model_id, info, verdict.allowed, verdict.reason, cost))
+        entries.append(Entry(model_id, info, verdict.allowed, verdict.reason, cost,
+                             facts.get(model_id)))
 
     if data.get("stale") and not refresh:
         warnings.append("data is stale; refresh with: offload discover")
