@@ -207,6 +207,13 @@ docs, build, test, chore. Do not add yourself as a co-author.
   with a question that needs two files tells working models from broken ones in seconds.
 - Inkling committed a 380 MB JVM heap dump (`java_pid*.hprof`) with its work. The kit
   could refuse or drop files above a size limit; until then, read the file list.
+- **Real hardware found what loopback could not.** On real Wi-Fi (Windows PC + Android 15
+  phone) data synced both ways, but only the PC saw the phone: Windows sends a limited
+  broadcast through one adapter, here a virtual one (VirtualBox/Docker/WSL). The fix went
+  into the spec first (reply to a hello by unicast), then into a loopback scenario that
+  reproduces the one-way case, self-tested on the reference, then delegated to Rust and
+  Kotlin (`inkling:free`, 18 and 14 min). Afterwards a change crossed in under a second
+  from phone to PC and in about two seconds the other way.
 - A model passed with `--model` that is missing from the cached snapshot (a provider added
   after the last `discover`) is refused as "unknown model". The kit should refresh once
   before refusing.
