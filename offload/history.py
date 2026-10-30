@@ -55,10 +55,16 @@ def load(root: Path) -> list[dict]:
 
 
 def stats(root: Path, role: str | None = None) -> dict[str, Stats]:
-    """Per-model summary: how many runs and how many passed the check."""
+    """Per-model summary: how many runs and how many passed the check.
+
+    A run stopped by an exhausted quota is kept in the file but not counted: it
+    says nothing about the model, only about the account.
+    """
     totals: dict[str, list[int]] = {}
     for entry in load(root):
         if role and entry.get("role") != role:
+            continue
+        if entry.get("outcome") == "quota":
             continue
         counter = totals.setdefault(entry["model"], [0, 0])
         counter[0] += 1

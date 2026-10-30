@@ -49,6 +49,7 @@ def cmd_models(args) -> int:
             "allowed": e.allowed,
             "reason": e.reason,
             "privacy": e.privacy.to_dict() if e.privacy else None,
+            "cost_per_million": e.cost,
         }
         for e in entries
     ]

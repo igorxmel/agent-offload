@@ -13,6 +13,7 @@ import pytest
 from offload import policy, privacy
 from offload.privacy import Privacy
 
+FREE = [0.0, 0.0]
 FIXTURE = Path(__file__).parent / "fixtures" / "privacy_table.html"
 
 
@@ -61,32 +62,32 @@ def known(trains, days) -> Privacy:
 
 
 def test_unknown_model_is_denied_by_default() -> None:
-    assert not policy.evaluate("opencode/new-model", None, STRICT).allowed
-    assert not policy.evaluate("opencode/new-model", None, PRIVATE).allowed
+    assert not policy.evaluate("opencode/new-model", None, STRICT, cost=FREE, tools=True).allowed
+    assert not policy.evaluate("opencode/new-model", None, PRIVATE, cost=FREE, tools=True).allowed
 
 
 def test_training_models_are_denied_unless_policy_allows() -> None:
-    assert not policy.evaluate("x/m", known(True, None), PRIVATE).allowed
-    assert policy.evaluate("x/m", known(True, None), OPEN).allowed
+    assert not policy.evaluate("x/m", known(True, None), PRIVATE, cost=FREE, tools=True).allowed
+    assert policy.evaluate("x/m", known(True, None), OPEN, cost=FREE, tools=True).allowed
 
 
 def test_retention_limit_is_enforced() -> None:
-    assert policy.evaluate("x/m", known(False, 0), STRICT).allowed
-    assert not policy.evaluate("x/m", known(False, 30), STRICT).allowed
-    assert policy.evaluate("x/m", known(False, 30), PRIVATE).allowed
-    assert not policy.evaluate("x/m", known(False, 31), PRIVATE).allowed
+    assert policy.evaluate("x/m", known(False, 0), STRICT, cost=FREE, tools=True).allowed
+    assert not policy.evaluate("x/m", known(False, 30), STRICT, cost=FREE, tools=True).allowed
+    assert policy.evaluate("x/m", known(False, 30), PRIVATE, cost=FREE, tools=True).allowed
+    assert not policy.evaluate("x/m", known(False, 31), PRIVATE, cost=FREE, tools=True).allowed
 
 
 def test_unknown_retention_is_not_treated_as_zero() -> None:
-    assert not policy.evaluate("x/m", known(False, None), STRICT).allowed
+    assert not policy.evaluate("x/m", known(False, None), STRICT, cost=FREE, tools=True).allowed
 
 
 def test_manual_allow_and_deny_win() -> None:
     pol = policy.Policy.from_preset("strict")
     pol.allowed = ["nemotron-3-ultra-free"]
-    assert policy.evaluate("opencode/nemotron-3-ultra-free", None, pol).allowed
+    assert policy.evaluate("opencode/nemotron-3-ultra-free", None, pol, cost=FREE, tools=True).allowed
     pol.denied = ["opencode/nemotron-3-ultra-free"]
-    assert not policy.evaluate("opencode/nemotron-3-ultra-free", None, pol).allowed
+    assert not policy.evaluate("opencode/nemotron-3-ultra-free", None, pol, cost=FREE, tools=True).allowed
 
 
 def test_missing_policy_file_means_strictest(tmp_path) -> None:

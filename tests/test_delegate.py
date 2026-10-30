@@ -48,7 +48,7 @@ def result(out: str = GOOD_REPORT, code: int = 0, timed_out: bool = False) -> Ag
 def writer(files: dict[str, str], out: str = GOOD_REPORT):
     """A fake executor that writes files into the project and reports."""
 
-    def run(root, agent, model, message, task_file, timeout):
+    def run(root, agent, model, message, task_file, timeout, *_):
         for name, text in files.items():
             target = Path(root) / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -90,7 +90,7 @@ def test_infrastructure_failure_falls_through_to_the_next_model(tmp_path) -> Non
     root = make_repo(tmp_path)
     calls = []
 
-    def flaky(root_, agent, model, message, task_file, timeout):
+    def flaky(root_, agent, model, message, task_file, timeout, *_):
         calls.append(model)
         if model == "p/m1":
             # Leaves junk behind and then fails: the next attempt must not see it.
@@ -379,7 +379,7 @@ def test_holdout_command_never_reaches_the_executor_or_the_disk(tmp_path) -> Non
     secret = "git ls-files --error-unmatch SECRET-HOLDOUT-MARKER"
     seen: list[str] = []
 
-    def spy(root_, agent, model, message, task_file, timeout):
+    def spy(root_, agent, model, message, task_file, timeout, *_):
         seen.append(message + (Path(root_) / task_file).read_text(encoding="utf-8"))
         (Path(root_) / "new.txt").write_text("x\n", encoding="utf-8")
         return result()
@@ -402,7 +402,7 @@ def test_resume_builds_on_the_earlier_branch_and_leaves_it_alone(tmp_path) -> No
 
     seen: list[str] = []
 
-    def fixer(root_, agent, model, message, task_file, timeout):
+    def fixer(root_, agent, model, message, task_file, timeout, *_):
         seen.append((Path(root_) / task_file).read_text(encoding="utf-8"))
         assert (Path(root_) / "new.txt").exists()  # the earlier work is there
         (Path(root_) / "second.txt").write_text("y\n", encoding="utf-8")

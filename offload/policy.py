@@ -100,16 +100,49 @@ def short_id(model_id: str) -> str:
 
 
 def _listed(model_id: str, names: list[str]) -> bool:
+    # `provider/*` covers a whole provider: a free-tier key makes all of its models
+    # free for this person, which no catalog can know.
+    provider = model_id.split("/", 1)[0]
+    if any(name.strip() == f"{provider}/*" for name in names):
+        return True
     keys = {normalize(name) for name in names} | {normalize(short_id(n)) for n in names}
     return normalize(short_id(model_id)) in keys or normalize(model_id) in keys
 
 
-def evaluate(model_id: str, privacy: Privacy | None, policy: Policy) -> Verdict:
-    """Whether a model is acceptable. Checks run in order of importance."""
+def evaluate(
+    model_id: str,
+    privacy: Privacy | None,
+    policy: Policy,
+    *,
+    cost: list[float] | None,
+    tools: bool | None,
+) -> Verdict:
+    """Whether a model is acceptable. Checks run in order of importance.
+
+    `cost` is [input, output] dollars per million tokens, or None when unknown;
+    `tools` is whether the model can call tools, or None when unknown. Both are
+    required arguments on purpose: there is no default that could quietly mean
+    "free" or "capable".
+    """
     if _listed(model_id, policy.denied):
         return Verdict(False, "denied manually")
     if _listed(model_id, policy.allowed):
         return Verdict(True, "allowed manually")
+
+    # Price before privacy: the kit is for free models, and an unknown price is
+    # treated like unknown terms - denied until a person decides.
+    if cost is None:
+        return Verdict(False, "price unknown (to allow: offload allow <model>)")
+    if max(cost) > 0:
+        return Verdict(
+            False,
+            f"paid: ${cost[0]:g} in / ${cost[1]:g} out per 1M tokens "
+            "(free-tier key? offload allow <provider>/*)",
+        )
+    if tools is None:
+        return Verdict(False, "unknown whether it can call tools (an agent needs them)")
+    if not tools:
+        return Verdict(False, "cannot call tools (an agent needs them)")
 
     if privacy is None:
         if policy.require_known:

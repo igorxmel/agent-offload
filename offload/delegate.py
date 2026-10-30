@@ -10,9 +10,10 @@ The flow, and why:
    diff unattributable, and no check command means a junk generator.
 2. Work happens on a scratch branch `offload/...`. The person's tree is never
    touched, and the original branch is checked out again at the end.
-3. Infrastructure failures (timeout, provider error, empty answer) retry on the
-   next acceptable model. A failed *check* does not: that is a quality verdict,
-   and it goes to the orchestrator.
+3. Infrastructure failures (timeout, stall, provider error, empty answer) retry
+   on the next acceptable model. A failed *check* does not: that is a quality
+   verdict, and it goes to the orchestrator. An exhausted quota skips the rest of
+   that provider's models (see `quota`).
 4. The kit runs the check itself, and verifies the executor did not touch its
    own cage (`.offload/`, `.opencode/`). Tampering discards everything.
 """
@@ -24,11 +25,16 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from offload import checks, config, discover, gitops, history, opencode, paths, report, select
+from offload import (
+    checks, config, discover, gitops, history, opencode, paths, quota, report, select,
+)
 
 # Exit codes. 0 passed; 3 the check failed or nothing changed; 4 every executor
-# attempt failed; 5 the executor touched its own limits. 1 and 2 live in the CLI.
-EXIT = {"passed": 0, "failed": 3, "no_changes": 3, "executor_error": 4, "tampered": 5}
+# attempt failed (`quota` when every one hit an exhausted quota); 5 the executor
+# touched its own limits. 1 and 2 live in the CLI.
+EXIT = {
+    "passed": 0, "failed": 3, "no_changes": 3, "executor_error": 4, "quota": 4, "tampered": 5,
+}
 
 MESSAGE = "Carry out the task described in the attached file."
 
@@ -50,7 +56,7 @@ class DelegateError(Exception):
 @dataclass
 class Attempt:
     model: str
-    outcome: str  # ok | timeout | error | empty
+    outcome: str  # ok | timeout | stall | quota | error | empty
     seconds: float
     detail: str = ""
 
@@ -156,7 +162,14 @@ def _resume_tip(root: Path, resume: str | None, role: str) -> str | None:
     return tip
 
 
-def _candidates(root, snapshot, role: str, model: str | None, attempts: int) -> list[str]:
+def _candidates(root, snapshot, role: str, model: str | None, skip: set[str]) -> list[str]:
+    """Every model that may be tried, best first, without providers whose quota is
+    exhausted. The attempt limit is applied while trying, not here: a quota stop
+    met on the way removes a whole provider, and the next candidates must come
+    from the others.
+
+    A model the person named explicitly is tried even then: they asked for it.
+    """
     ranked = [c.model for c in select.ranked(root, snapshot, role)]
     if not ranked:
         raise DelegateError("no acceptable model. See: offload models", code=2)
@@ -164,8 +177,16 @@ def _candidates(root, snapshot, role: str, model: str | None, attempts: int) -> 
         if model not in ranked:
             reason = next((e.reason for e in snapshot.entries if e.id == model), "unknown model")
             raise DelegateError(f"{model} is not acceptable under the project policy: {reason}", 2)
-        ranked = [model] + [m for m in ranked if m != model]
-    return ranked[:attempts]
+        rest = [m for m in ranked if m != model and quota.provider(m) not in skip]
+        return [model] + rest
+    usable = [m for m in ranked if quota.provider(m) not in skip]
+    if not usable:
+        raise DelegateError(
+            "every acceptable model's provider reported an exhausted quota recently "
+            f"({', '.join(sorted(skip))}); try later or connect another provider",
+            code=4,
+        )
+    return usable
 
 
 def delegate(
@@ -186,8 +207,13 @@ def delegate(
     cfg = config.load(root)
     verify = _preflight(root, cfg, verify_cmd, role)
     resume_tip = _resume_tip(root, resume, role)
+    fresh = snapshot is None
     snapshot = snapshot or discover.discover(root)
-    candidates = _candidates(root, snapshot, role, model, max_attempts)
+    if model and fresh and model not in {e.id for e in snapshot.entries}:
+        # A provider connected after the last discovery: look again before refusing.
+        snapshot = discover.discover(root, refresh=True)
+    skip = quota.exhausted(root, cfg.quota_cooldown_hours)
+    candidates = _candidates(root, snapshot, role, model, skip)
 
     origin = gitops.current_ref(root)
     base = resume_tip or gitops.head(root)
@@ -217,22 +243,40 @@ def delegate(
     keep_branch = False
     try:
         result = None
+        # Quota stops do not count: they take seconds and say nothing about the model.
+        spent = 0
         for candidate in candidates:
+            if spent >= max_attempts:
+                continue  # not `break`: the `else` below must still run
+            if quota.provider(candidate) in skip and candidate != model:
+                continue  # an earlier attempt in this run exhausted this provider
             result = executor(
                 root, f"offload-{role}", candidate, MESSAGE, Path(relative_task),
-                cfg.executor_timeout,
+                cfg.executor_timeout, cfg.stall_timeout,
             )
             outcome, detail = _classify(result)
             verdict.attempts.append(Attempt(candidate, outcome, round(result.seconds, 1), detail))
             if outcome == "ok":
                 verdict.model = candidate
                 break
+            if outcome == "quota":
+                quota.mark(root, candidate)
+                skip.add(quota.provider(candidate))
+            else:
+                spent += 1
             if writes:
                 # A failed attempt must leave no trace. Only ever on our own scratch
                 # branch: a hard reset on the person's branch would destroy their work.
                 gitops.discard_changes(root, base)
         else:
-            verdict.notes.append("every attempt failed before producing a usable answer")
+            if verdict.attempts and all(a.outcome == "quota" for a in verdict.attempts):
+                verdict.status = "quota"
+                verdict.notes.append(
+                    "every attempt hit an exhausted quota; those providers are skipped for "
+                    f"{cfg.quota_cooldown_hours:g} h. Try later or connect another provider"
+                )
+            else:
+                verdict.notes.append("every attempt failed before producing a usable answer")
             return verdict
 
         verdict.report = report.parse(result.stdout)
@@ -278,6 +322,15 @@ def delegate(
                 shown = ", ".join(stray[:6]) + (" ..." if len(stray) > 6 else "")
                 verdict.notes.append(f"out of scope, discarded ({len(stray)}): {shown}")
 
+        big = _oversized(root, files, cfg.max_file_kb)
+        if big:
+            gitops.discard_paths(root, big)
+            files = [f for f in files if f not in big]
+            verdict.files = files
+            verdict.notes.append(
+                f"larger than {cfg.max_file_kb} KB, discarded ({len(big)}): {', '.join(big[:6])}"
+            )
+
         if not files:
             verdict.status = "no_changes"
             return verdict
@@ -312,10 +365,27 @@ def delegate(
         _record(root, verdict, role)
 
 
+def _oversized(root: Path, files: list[str], limit_kb: int) -> list[str]:
+    """Changed files above the size limit. A deleted file has no size and passes."""
+    if limit_kb <= 0:
+        return []
+    big = []
+    for name in files:
+        path = root / name
+        if path.is_file() and path.stat().st_size > limit_kb * 1024:
+            big.append(name)
+    return big
+
+
 def _classify(result) -> tuple[str, str]:
     """Infrastructure outcome of one executor run, separate from result quality."""
+    if getattr(result, "stalled", False):
+        return "stall", f"no output for too long, killed after {result.seconds:.0f}s"
     if result.timed_out:
         return "timeout", f"killed after {result.seconds:.0f}s"
+    if result.returncode != 0 and quota.is_quota(f"{result.stderr}\n{result.stdout}"):
+        detail = report.strip_ansi(result.stderr or result.stdout).strip().splitlines()
+        return "quota", (detail[-1][:200] if detail else "quota exhausted")
     if result.returncode != 0:
         detail = report.strip_ansi(result.stderr or result.stdout).strip().splitlines()
         return "error", (detail[-1][:200] if detail else f"exit {result.returncode}")

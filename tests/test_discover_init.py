@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
 from offload import config, discover, history, init, paths, policy, select
@@ -19,13 +20,19 @@ def lister() -> list[str]:
     return list(MODELS)
 
 
+def free(url: str) -> str:
+    """A price catalog where every listed model costs nothing."""
+    provider = {"models": {m.split("/", 1)[1]: {"cost": {"input": 0, "output": 0}, "tool_call": True} for m in MODELS}}
+    return json.dumps({"opencode": provider})
+
+
 def setup(tmp_path, preset="private"):
     policy.save(tmp_path, policy.Policy.from_preset(preset))
     return tmp_path
 
 
 def test_policy_is_applied_to_fresh_data(tmp_path) -> None:
-    snap = discover.discover(setup(tmp_path), fetcher=fetcher, lister=lister, now=1000)
+    snap = discover.discover(setup(tmp_path), fetcher=fetcher, lister=lister, price_fetcher=free, now=1000)
     verdict = {e.id: e.allowed for e in snap.entries}
     assert verdict["opencode/glm-5.3-flash"] is True
     assert verdict["opencode/muse-spark-1.3-contributor"] is False  # trains on prompts
@@ -40,21 +47,21 @@ def test_cache_avoids_second_fetch_and_expires(tmp_path) -> None:
         calls.append(url)
         return PAGE
 
-    discover.discover(root, fetcher=counting, lister=lister, now=1000)
-    discover.discover(root, fetcher=counting, lister=lister, now=1000 + 3600)
+    discover.discover(root, fetcher=counting, lister=lister, price_fetcher=free, now=1000)
+    discover.discover(root, fetcher=counting, lister=lister, price_fetcher=free, now=1000 + 3600)
     assert len(calls) == 1
-    discover.discover(root, fetcher=counting, lister=lister, now=1000 + 25 * 3600)
+    discover.discover(root, fetcher=counting, lister=lister, price_fetcher=free, now=1000 + 25 * 3600)
     assert len(calls) == 2
 
 
 def test_broken_page_keeps_previous_data_instead_of_opening_access(tmp_path) -> None:
     root = setup(tmp_path)
-    discover.discover(root, fetcher=fetcher, lister=lister, now=1000)
+    discover.discover(root, fetcher=fetcher, lister=lister, price_fetcher=free, now=1000)
     snap = discover.discover(
         root,
         refresh=True,
         fetcher=lambda u: "<html>different layout</html>",
-        lister=lister,
+        lister=lister, price_fetcher=free,
         now=2000,
     )
     assert snap.warnings
@@ -63,14 +70,14 @@ def test_broken_page_keeps_previous_data_instead_of_opening_access(tmp_path) -> 
 
 def test_no_cache_and_broken_page_denies_everything(tmp_path) -> None:
     snap = discover.discover(
-        setup(tmp_path), fetcher=lambda u: "<html></html>", lister=lister, now=1000
+        setup(tmp_path), fetcher=lambda u: "<html></html>", lister=lister, price_fetcher=free, now=1000
     )
     assert snap.allowed() == []
 
 
 def test_pick_prefers_measured_results_over_list_order(tmp_path) -> None:
     root = setup(tmp_path, "open")
-    snap = discover.discover(root, fetcher=fetcher, lister=lister, now=1000)
+    snap = discover.discover(root, fetcher=fetcher, lister=lister, price_fetcher=free, now=1000)
     assert select.pick(root, snap, "build").basis == "guess"
 
     history.record(root, "opencode/mystery", "build", passed=True)
@@ -80,7 +87,7 @@ def test_pick_prefers_measured_results_over_list_order(tmp_path) -> None:
 
 def test_pick_returns_none_when_nothing_is_allowed(tmp_path) -> None:
     snap = discover.discover(
-        setup(tmp_path, "strict"), fetcher=lambda u: "<html></html>", lister=lister, now=1000
+        setup(tmp_path, "strict"), fetcher=lambda u: "<html></html>", lister=lister, price_fetcher=free, now=1000
     )
     assert select.pick(tmp_path, snap, "build") is None
 
