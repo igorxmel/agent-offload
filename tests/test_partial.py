@@ -46,7 +46,7 @@ def test_stalled_work_is_kept_on_a_partial_branch_and_can_be_resumed(tmp_path) -
     assert done.status == "passed"
 
 
-def test_timeout_keeps_work_too_but_a_plain_error_does_not(tmp_path) -> None:
+def test_timeout_and_a_plain_error_keep_work_too(tmp_path) -> None:
     root = make_repo(tmp_path)
     timed = delegate.delegate(root, "x", snapshot=snapshot("p/m1"),
                               executor=killed("timeout", {"a.txt": "a\n"}))
@@ -57,7 +57,15 @@ def test_timeout_keeps_work_too_but_a_plain_error_does_not(tmp_path) -> None:
         return AgentResult(1, "", "Error: something", 1.0)
 
     plain = delegate.delegate(root, "y", snapshot=snapshot("p/m1"), executor=errored)
-    assert plain.partial == []
+    assert len(plain.partial) == 1  # seen live: 44 steps lost to an unexplained error
+
+
+def test_error_detail_skips_the_banner_and_finds_the_real_message() -> None:
+    banner = "> offload-build - cohere/north-mini-code:free"
+    with_error = AgentResult(1, "", f"Error: Provider returned error\n{banner}\n", 1.0)
+    assert delegate._classify(with_error) == ("error", "Error: Provider returned error")
+    only_banner = AgentResult(3, "", f"{banner}\n", 1.0)
+    assert delegate._classify(only_banner) == ("error", "exit 3, no error message")
 
 
 def test_work_done_before_a_quota_stop_is_kept(tmp_path) -> None:

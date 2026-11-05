@@ -326,7 +326,7 @@ def delegate(
                 skip.add(quota.provider(candidate))
             else:
                 spent += 1
-            if writes and outcome in ("timeout", "stall", "quota"):
+            if writes:  # whatever stopped it, finished steps are not thrown away
                 kept = _keep_partial(work, branch, len(verdict.partial) + 1, scope or cfg.scope,
                                      cfg.max_file_kb, candidate, outcome)
                 if kept:
@@ -485,6 +485,18 @@ def _oversized(root: Path, files: list[str], limit_kb: int) -> list[str]:
     return big
 
 
+def _error_detail(result) -> str:
+    """The line that explains a failure. OpenCode also prints step lines and a
+    `> agent - model` banner on stderr, and the last line can be that banner."""
+    text = report.strip_ansi(f"{result.stderr}\n{result.stdout}")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    errors = [line for line in lines if line.lower().startswith("error")]
+    if errors:
+        return errors[-1][:200]
+    useful = [line for line in lines if not line.startswith(">")]
+    return useful[-1][:200] if useful else ""
+
+
 def _classify(result) -> tuple[str, str]:
     """Infrastructure outcome of one executor run, separate from result quality."""
     if getattr(result, "stalled", False):
@@ -492,11 +504,9 @@ def _classify(result) -> tuple[str, str]:
     if result.timed_out:
         return "timeout", f"killed after {result.seconds:.0f}s"
     if result.returncode != 0 and quota.is_quota(f"{result.stderr}\n{result.stdout}"):
-        detail = report.strip_ansi(result.stderr or result.stdout).strip().splitlines()
-        return "quota", (detail[-1][:200] if detail else "quota exhausted")
+        return "quota", _error_detail(result) or "quota exhausted"
     if result.returncode != 0:
-        detail = report.strip_ansi(result.stderr or result.stdout).strip().splitlines()
-        return "error", (detail[-1][:200] if detail else f"exit {result.returncode}")
+        return "error", _error_detail(result) or f"exit {result.returncode}, no error message"
     if not result.stdout.strip():
         return "empty", "no output"
     return "ok", ""
