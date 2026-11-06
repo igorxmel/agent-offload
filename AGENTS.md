@@ -342,10 +342,6 @@ docs, build, test, chore. Do not add yourself as a co-author.
   instructions.
 - Per-user rather than per-project model history: today a model's record starts from zero
   in every project.
-- The privacy table has no row for most `-free` variants (e.g. `deepseek-v4.1-flash-free`),
-  so they are denied under every preset until allowed by hand. Decide whether a `-free`
-  model may inherit the row of its paid sibling (the table's own footnotes suggest the
-  terms can differ, so the current default is conservative on purpose).
 
 ## Handoff (state on 2026-10-30)
 
@@ -367,6 +363,13 @@ Written so a fresh session can continue without the conversation that produced t
   `batfile.py` was ported only as an experiment to measure the method. The owner asked to
   keep this repository focused on the kit.
 - Privacy policy is the owner's call per project; never loosen it on your own.
+- A `-free` model does **not** inherit the privacy row of its paid sibling (decided
+  2026-11-06): free variants are often free because prompts are logged, and the table's
+  own footnotes say the terms can differ. Without its own row it stays denied until a
+  person runs `offload allow`.
+- No paid credits or subscriptions (2026-11-06): the owner will not top up OpenRouter,
+  so the kit has to work within free daily allowances.
+- OmniRoute was tried and dropped (see "Arm C again").
 
 **Experiments, not in the repository:**
 - `.experiments/rust-batfile-experiment.zip` (gitignored, 25 KB): both Rust ports, the
