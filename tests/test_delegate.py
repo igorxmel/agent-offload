@@ -199,6 +199,42 @@ def test_read_only_role_never_resets_the_persons_branch(tmp_path) -> None:
     assert verdict.status == "failed" and any("read-only" in n for n in verdict.notes)
 
 
+def _readonly(write: dict[str, str] | None = None):
+    def run(work, agent, model, message, task_file, timeout, *_):
+        for name, text in (write or {}).items():
+            (Path(work) / name).write_text(text, encoding="utf-8")
+        return result("Findings: none.\n")
+    return run
+
+
+def test_read_only_role_ignores_edits_the_person_already_had(tmp_path) -> None:
+    # Issue #1: an explore run on a dirty tree was "failed", or "tampered" when the
+    # person's own uncommitted edit was to CLAUDE.md or AGENTS.md.
+    root = make_repo(tmp_path)
+    (root / "base.txt").write_text("my edit\n", encoding="utf-8")
+    (root / "AGENTS.md").write_text("my own note\n", encoding="utf-8")
+    (root / "scratch.txt").write_text("untracked, mine\n", encoding="utf-8")
+    verdict = delegate.delegate(root, "look", role="explore", snapshot=snapshot("p/m1"),
+                                executor=_readonly())
+    assert verdict.status == "passed" and verdict.files == []
+    assert (root / "base.txt").read_text(encoding="utf-8") == "my edit\n"  # left alone
+
+
+def test_read_only_role_still_reports_what_the_executor_changed(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    (root / "base.txt").write_text("my edit\n", encoding="utf-8")
+    changed = delegate.delegate(root, "look", role="explore", snapshot=snapshot("p/m1"),
+                                executor=_readonly({"base.txt": "executor rewrote it\n",
+                                                    "new.txt": "x\n"}))
+    assert changed.status == "failed" and sorted(changed.files) == ["base.txt", "new.txt"]
+    gitops.git(root, "checkout", "-q", "--", "base.txt")
+    (root / "new.txt").unlink()
+    (root / "CLAUDE.md").write_text("mine\n", encoding="utf-8")
+    cage = delegate.delegate(root, "look", role="explore", snapshot=snapshot("p/m1"),
+                             executor=_readonly({"CLAUDE.md": "rewritten by executor\n"}))
+    assert cage.status == "tampered"  # an already-dirty file the executor then edits
+
+
 def test_executor_state_files_do_not_ride_into_the_commit(tmp_path) -> None:
     root = make_repo(tmp_path)
     (root / ".gitignore").write_text("", encoding="utf-8")  # no ignore for .offload/state

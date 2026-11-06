@@ -21,6 +21,7 @@ The flow, and why:
 
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 import uuid
@@ -284,6 +285,10 @@ def delegate(
     try:
         # Inside `try`: whatever fails from here on, the slot is released.
         usage_before = usage_reader(root)
+        # A read-only role without a slot runs in the person's own tree, which may
+        # already hold their uncommitted edits: remember them, so only what the
+        # executor changes is reported (issue #1).
+        baseline = _tree_state(work) if not slot else {}
         task_file = paths.state_dir(work) / "tasks" / f"{stamp}.md"
         task_file.parent.mkdir(parents=True, exist_ok=True)
         intro = (
@@ -362,7 +367,7 @@ def delegate(
             verdict.notes.append("executor did not follow the report format")
             verdict.report = {"RAW": report.clip(report.strip_ansi(result.stdout), 800)}
 
-        files = _relevant(gitops.changed_paths(work))
+        files = _changed_since(work, baseline)
         verdict.files = files
 
         touched = _tampered(files)
@@ -440,6 +445,27 @@ def delegate(
         verdict.seconds = time.monotonic() - started
         verdict.usage = opencode.usage_delta(usage_before, usage_reader(root))
         _record(root, verdict, role)
+
+
+def _digest(path: Path) -> str | None:
+    """Content fingerprint of a working-tree path; None when it does not exist."""
+    if path.is_file():
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    if path.is_dir():
+        return "dir"
+    return None
+
+
+def _tree_state(work: Path) -> dict[str, str | None]:
+    return {f: _digest(work / f) for f in _relevant(gitops.changed_paths(work))}
+
+
+def _changed_since(work: Path, baseline: dict[str, str | None]) -> list[str]:
+    """Changed paths, minus those that were already changed, unchanged since."""
+    return [
+        f for f in _relevant(gitops.changed_paths(work))
+        if f not in baseline or _digest(work / f) != baseline[f]
+    ]
 
 
 def _keep_partial(
