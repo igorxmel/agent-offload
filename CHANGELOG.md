@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `offload budget`: today's executor requests per provider, and where a quota stop was
+  last seen.
+- Executor usage is now exact per delegation and per attempt, read from each attempt's own
+  OpenCode session; overlapping delegations no longer report the same combined numbers.
+
+### Fixed
+- Read-only roles no longer count the person's own uncommitted edits as the executor's
+  ([#1](https://github.com/igorxmel/agent-offload/issues/1), reported by @mattabate).
+- Work done before any executor failure is kept on `<branch>-partial-N`, and the verdict
+  shows the real error line instead of OpenCode's banner.
+- OpenRouter's per-model "Daily limit reached" is recognised as a quota.
+
 ## 0.2.0 - 2026-10-30
 
 Everything here came out of running the kit on real work: a Rust + Kotlin to-do app with

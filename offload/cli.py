@@ -74,6 +74,19 @@ def cmd_pick(args) -> int:
     return 0
 
 
+def cmd_budget(args) -> int:
+    from offload import history
+
+    rows = history.budget_today(_root(args))
+    lines = [
+        f"{p:<16} {r['steps']:>5} requests in {r['attempts']} attempts"
+        + (f"; quota stop after {r['quota_after']}" if r["quota_after"] is not None else "")
+        for p, r in sorted(rows.items())
+    ]
+    _out(args, rows, "\n".join(lines) or "no executor requests today (UTC)")
+    return 0
+
+
 def cmd_discover(args) -> int:
     snap = discover.discover(_root(args), refresh=True)
     _warn(snap)
@@ -200,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="second check the executor never sees; run after --verify passes. "
                         "Flag only: a config file is readable by the executor")
     p.set_defaults(func=cmd_delegate)
+
+    p = sub.add_parser("budget", help="executor requests per provider today (UTC)")
+    p.set_defaults(func=cmd_budget)
 
     p = sub.add_parser("discover", help="refresh the model list and privacy terms")
     p.set_defaults(func=cmd_discover)

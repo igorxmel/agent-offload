@@ -143,6 +143,7 @@ offload models [--allowed]           models, and whether the policy allows them
 offload pick --role build -v         choose a model (basis: prefer | history | guess)
 offload allow|deny <model|provider/*>
 offload discover                     refresh models, prices, privacy terms
+offload budget                       today's executor requests per provider, quota stops
 offload delegate --task-file F       hand a task over, get a verdict
     --scope PATH  --holdout CMD  --resume BRANCH  --model M  --verify CMD
     --role review|explore|plan  --on BRANCH

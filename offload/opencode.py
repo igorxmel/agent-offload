@@ -14,6 +14,7 @@ import signal
 import subprocess
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,6 +92,47 @@ def usage(root: Path) -> dict[str, float] | None:
     return values
 
 
+def new_session_id() -> str:
+    """An id for `opencode run --session`, which creates the session under it.
+
+    Knowing the id beforehand is what lets the kit read one run's own usage:
+    `opencode stats` only counts per project, and every working copy of a
+    repository is the same project to OpenCode.
+    """
+    return f"ses_offload{uuid.uuid4().hex[:16]}"
+
+
+def session_usage(root: Path, session: str) -> dict[str, float] | None:
+    """What one session spent, from `opencode session export`; None when unknown."""
+    try:
+        data = json.loads(run(["session", "export", session], timeout=60, root=root))
+        info = data.get("info") or {}
+        tokens = info.get("tokens") or {}
+        messages = data.get("messages") or []
+        values = {
+            "steps": sum(1 for m in messages if isinstance(m, dict) and m.get("type") == "assistant"),
+            "input": tokens.get("input"),
+            "output": tokens.get("output"),
+            "reasoning": tokens.get("reasoning"),
+            "cache_read": (tokens.get("cache") or {}).get("read"),
+            "cost": info.get("cost"),
+        }
+    except (OpenCodeError, OSError, ValueError, AttributeError):
+        return None
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values.values()):
+        return None
+    return values
+
+
+def add_usage(parts: list[dict | None]) -> dict[str, float] | None:
+    """Sum of several runs' usage; None when any part is unknown."""
+    if not parts or any(p is None for p in parts):
+        return None
+    total = {k: sum(p[k] for p in parts) for k in USAGE_FIELDS}
+    total["cost"] = round(total["cost"], 4)
+    return total
+
+
 def usage_delta(before: dict | None, after: dict | None) -> dict[str, float] | None:
     if before is None or after is None:
         return None
@@ -144,7 +186,7 @@ def agent_env(root: Path) -> dict[str, str]:
 
 def run_agent(
     root: Path, agent: str, model: str, message: str, task_file: Path, timeout: int,
-    stall_timeout: int = 0,
+    stall_timeout: int = 0, session: str | None = None,
 ) -> AgentResult:
     """Runs one executor and waits for it, killing it on timeout or on a stall.
 
@@ -161,7 +203,7 @@ def run_agent(
     process = subprocess.Popen(
         [
             find(), "run", "--auto", "--agent", agent, "--model", model,
-            "--file", str(task_file), message,
+            "--file", str(task_file), *(["--session", session] if session else []), message,
         ],
         cwd=root,
         env=agent_env(root),

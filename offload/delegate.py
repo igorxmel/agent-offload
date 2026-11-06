@@ -74,6 +74,8 @@ class Attempt:
     outcome: str  # ok | timeout | stall | quota | error | empty
     seconds: float
     detail: str = ""
+    # What this attempt's own OpenCode session spent; None when unknown.
+    usage: dict | None = None
 
 
 @dataclass
@@ -238,6 +240,7 @@ def delegate(
     executor=opencode.run_agent,
     now=time.time,
     usage_reader=None,
+    session_reader=None,
 ) -> Verdict:
     started = time.monotonic()
     cfg = config.load(root)
@@ -281,6 +284,7 @@ def delegate(
     )
     keep_branch = False
     usage_reader = usage_reader or opencode.usage
+    session_reader = session_reader or opencode.session_usage
     usage_before = None
     try:
         # Inside `try`: whatever fails from here on, the slot is released.
@@ -317,12 +321,14 @@ def delegate(
                 continue  # not `break`: the `else` below must still run
             if quota.provider(candidate) in skip and candidate != model:
                 continue  # an earlier attempt in this run exhausted this provider
+            session = opencode.new_session_id()
             result = executor(
                 work, f"offload-{role}", candidate, MESSAGE, Path(relative_task),
-                cfg.executor_timeout, cfg.stall_timeout,
+                cfg.executor_timeout, cfg.stall_timeout, session,
             )
             outcome, detail = _classify(result)
-            verdict.attempts.append(Attempt(candidate, outcome, round(result.seconds, 1), detail))
+            verdict.attempts.append(Attempt(candidate, outcome, round(result.seconds, 1), detail,
+                                            session_reader(work, session)))
             if outcome == "ok":
                 verdict.model = candidate
                 break
@@ -443,7 +449,10 @@ def delegate(
             if writes and not keep_branch:
                 verdict.branch = ""
         verdict.seconds = time.monotonic() - started
-        verdict.usage = opencode.usage_delta(usage_before, usage_reader(root))
+        # Per-session numbers are exact even when delegations overlap; the project
+        # totals before and after are the fallback, shared by overlapping runs.
+        verdict.usage = opencode.add_usage([a.usage for a in verdict.attempts]) or \
+            opencode.usage_delta(usage_before, usage_reader(root))
         _record(root, verdict, role)
 
 
@@ -543,9 +552,11 @@ def _record(root: Path, verdict: Verdict, role: str) -> None:
     for attempt in verdict.attempts:
         if attempt.outcome != "ok":
             history.record(root, attempt.model, role, False, attempt.seconds,
-                           outcome=attempt.outcome)
+                           outcome=attempt.outcome, usage=attempt.usage)
     if verdict.model:
         history.record(
             root, verdict.model, role, verdict.status == "passed",
-            verdict.seconds, outcome=verdict.status, usage=verdict.usage,
+            verdict.seconds, outcome=verdict.status,
+            usage=next((a.usage for a in verdict.attempts if a.model == verdict.model), None)
+            or verdict.usage,
         )

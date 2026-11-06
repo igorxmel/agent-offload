@@ -333,6 +333,49 @@ def test_usage_parses_opencode_stats_and_rejects_odd_shapes(monkeypatch, tmp_pat
     assert opencode.usage(tmp_path) is None
 
 
+def test_usage_comes_from_each_attempts_own_session(tmp_path) -> None:
+    # Two delegations at once used to report the same project-wide numbers.
+    root = make_repo(tmp_path)
+    sessions = []
+
+    def executor(work, agent, model, message, task_file, timeout, stall, session):
+        sessions.append(session)
+        if model == "p/m1":
+            return AgentResult(1, "", "Error: boom", 1.0)
+        return writer({"new.txt": "x\n"})(work, agent, model, message, task_file, timeout)
+
+    def per_session(work, session):
+        n = sessions.index(session) + 1
+        return _totals(10 * n, 100 * n, 10 * n, 0.0)
+
+    verdict = delegate.delegate(root, "create new.txt", snapshot=snapshot("p/m1", "p/m2"),
+                                executor=executor, session_reader=per_session,
+                                usage_reader=lambda r: _totals(999, 999, 999, 0.0))
+    assert len(set(sessions)) == 2 and all(s.startswith("ses_offload") for s in sessions)
+    assert verdict.usage["steps"] == 30 and verdict.usage["input"] == 300  # 10+20, not 0
+    assert [a.usage["steps"] for a in verdict.attempts] == [10, 20]
+
+
+def test_budget_today_counts_requests_per_provider_and_the_quota_point(tmp_path) -> None:
+    now = 1_000_000 * 86400 + 3600  # 01:00 UTC
+    for ts, model, outcome, steps in (
+        (now - 7200, "openrouter/a", "passed", 400),  # yesterday: not counted
+        (now - 60, "openrouter/a", "passed", 60),
+        (now - 30, "openrouter/b", "quota", 40),
+        (now - 10, "zen/c", "error", 5),
+    ):
+        history.record(tmp_path, model, "build", outcome == "passed", 1.0,
+                       outcome=outcome, usage={"steps": steps})
+        lines = (tmp_path / ".offload" / "state" / "history.jsonl").read_text(encoding="utf-8")
+        last = json.loads(lines.splitlines()[-1])
+        last["ts"] = ts
+        (tmp_path / ".offload" / "state" / "history.jsonl").write_text(
+            "\n".join(lines.splitlines()[:-1] + [json.dumps(last)]) + "\n", encoding="utf-8")
+    rows = history.budget_today(tmp_path, now=now)
+    assert rows["openrouter"] == {"steps": 100, "attempts": 2, "quota_after": 100}
+    assert rows["zen"]["steps"] == 5 and rows["zen"]["quota_after"] is None
+
+
 def test_explicit_model_missing_from_cache_triggers_one_refresh(tmp_path, monkeypatch) -> None:
     root = make_repo(tmp_path)
     calls = []

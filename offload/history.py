@@ -54,6 +54,34 @@ def load(root: Path) -> list[dict]:
     return entries
 
 
+def budget_today(root: Path, now: float | None = None) -> dict[str, dict]:
+    """Executor requests per provider since 00:00 UTC, when free daily quotas reset.
+
+    `steps` counts the model requests of every recorded attempt with known usage;
+    `quota_after` is the step count at which a quota stop was last seen today - the
+    best estimate of that provider's daily allowance, since providers do not publish
+    it reliably (OpenRouter's moved from ~500 to ~100 requests within a week).
+    Per project: other projects and people sharing an account or an IP draw from
+    the same allowance unseen.
+    """
+    now = time.time() if now is None else now
+    day_start = now - now % 86400
+    totals: dict[str, dict] = {}
+    for entry in load(root):
+        if entry.get("ts", 0) < day_start:
+            continue
+        provider = str(entry.get("model", "")).split("/", 1)[0]
+        row = totals.setdefault(provider, {"steps": 0, "attempts": 0, "quota_after": None})
+        row["attempts"] += 1
+        usage = entry.get("usage") or {}
+        steps = usage.get("steps")
+        if isinstance(steps, (int, float)) and not isinstance(steps, bool):
+            row["steps"] += int(steps)
+        if entry.get("outcome") == "quota":
+            row["quota_after"] = row["steps"]
+    return totals
+
+
 def stats(root: Path, role: str | None = None) -> dict[str, Stats]:
     """Per-model summary: how many runs and how many passed the check.
 

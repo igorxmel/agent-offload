@@ -63,9 +63,13 @@ Measured on one medium task (see AGENTS.md, "Measuring the saving"): delegating 
 orchestrator's output 2.6x but its total cost only ~20%, because every turn spent waiting
 or reviewing re-reads the whole session. So:
 
-- **Run independent tasks at the same time.** Each delegation takes its own working
-  copy, so start them as separate background commands (one per `--scope`, e.g. `rust`
-  and `kotlin`) and handle each verdict when it arrives. Do not poll in between.
+- **Check the free budget first:** `offload budget` shows today's executor requests per
+  provider and where a quota stop was last seen. Free daily allowances are small and
+  shared per account (OpenRouter) or per IP (OpenCode Zen): a medium task can need a day
+  of them. If the budget is tight, run tasks one after another, not side by side.
+- **Run independent tasks at the same time** when the budget allows. Each delegation takes
+  its own working copy, so start them as separate background commands (one per `--scope`,
+  e.g. `rust` and `kotlin`) and handle each verdict when it arrives. Do not poll in between.
 - **Fewer, larger tasks.** Each delegation costs you a few turns of reading; six small
   ones cost more than three larger ones.
 - **Let a free model do the first review:**

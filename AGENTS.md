@@ -219,10 +219,16 @@ and every one was checked by mutation.
 - **`PWD`**: see "Verified behaviour" above.
 - An explicit `--model` missing from the cached snapshot (a provider connected after the
   last `discover`) triggers one refresh instead of "unknown model".
-- **Executor usage**: `opencode stats --project . --all --json` before and after a
-  delegation; the difference (steps, tokens, cost) goes into the verdict and the history.
-  Unreadable or shrinking totals give "unknown", never a guess. Two delegations running in
-  one project at once would share the difference.
+- **Executor usage**: every attempt runs with its own session id (`opencode run --session
+  <id>` creates it), and `opencode session export <id>` gives that session's tokens; steps
+  are its assistant messages. `opencode stats` cannot do this: it counts per project, and
+  every worktree of a repository is the same project (verified 2026-11-06). The stats
+  difference stays as a fallback when an export fails. Unknown is reported as unknown.
+  OpenCode puts a tiny nonzero `cost` even on `:free` models (an estimate of its own;
+  nothing is billed without credits on the account).
+- **Free budget**: `offload budget` sums today's (UTC) executor requests per provider from
+  the history and shows the step count at which a quota stop was last seen - the only
+  usable estimate of a daily allowance that providers change without notice.
 
 - **Working copies (`slots`)**: every writing delegation runs in its own git worktree
   `.offload/state/worktrees/slot-N`, so the person's tree is never checked out and
