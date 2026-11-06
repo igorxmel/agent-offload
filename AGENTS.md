@@ -291,6 +291,21 @@ provider was already out of quota. What it taught:
   per-run filter the kit can use, so two delegations running at once each report the
   combined usage of both. Read it as an upper bound when runs overlap.
 
+### Arm C again (2026-11-05), and OmniRoute dropped
+
+Rerun on other models (`inkling:free` had disappeared from OpenRouter): OpenRouter's
+account-wide "free-models-per-day" limit stopped it about five minutes in, after ~100
+executor steps (on 2026-10-30 the same account ran ~500 in a day). Its message offers
+1000 free-model requests a day after a one-time $10 top-up. The Kotlin work survived on a
+`-partial-1` branch; the Rust work was lost to an unexplained error (fixed: any failed
+attempt now keeps its work, and the verdict shows the error line, not OpenCode's banner).
+
+[OmniRoute](https://github.com/cheaper-inference/OmniRoute) was tried as a way to pool
+more free providers and dropped by the owner the same day: its keyless providers were a
+volunteer pool without tool calls, a reverse-engineered Cloudflare endpoint, DuckDuckGo
+(marked "avoid" in its own catalog) and an unknown proxy; the key-based ones were either
+already connected in OpenCode directly or no longer free (Mistral). Nothing of it is used.
+
 ## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is

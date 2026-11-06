@@ -188,8 +188,6 @@ access; it never opens it.
 - [x] Hidden checks, scope, resume, quota and stall handling, paid-model filter
 - [x] Parallel delegations in worktree slots, free first review
 - [ ] Re-measure the A/B with parallel slots, and with a cheaper orchestrator model
-- [ ] [OmniRoute](https://github.com/cheaper-inference/OmniRoute) as a provider for
-      open-source projects, restricted to explicitly chosen free providers
 - [ ] Per-user model history instead of per-project
 
 ## Contributing
