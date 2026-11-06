@@ -279,6 +279,14 @@ grows with the size of the implementation relative to the orchestrator's reading
 review, and it is eaten by every extra turn the orchestrator spends waiting or reviewing.
 One run per arm: indicative, not a benchmark.
 
+**A weakness of those hidden checks, found 2026-11-06:** a conformance vector compares the
+merge result as the implementation itself parses it. Code that silently drops `due` reads
+both sides without it and passes every `due` vector; the unchanged base did. The vectors
+checked merge order for implementations that keep `due` (both arms did), and only the
+interop scenarios, which compare the real store files, prove the field survives. A check
+that goes through the implementation's own parser cannot tell "ignored" from "handled":
+compare raw output, or pair such a check with one that does.
+
 ### Arm C (2026-10-30 evening): parallel slots, stopped by quota
 
 The same task with the improved kit (two delegations at once, `--task-file`, free review
