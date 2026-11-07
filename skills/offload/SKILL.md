@@ -66,7 +66,13 @@ or reviewing re-reads the whole session. So:
 - **Check the free budget first:** `offload budget` shows today's executor requests per
   provider and where a quota stop was last seen. Free daily allowances are small and
   shared per account (OpenRouter) or per IP (OpenCode Zen): a medium task can need a day
-  of them. If the budget is tight, run tasks one after another, not side by side.
+  of them. If the budget is tight, run tasks one after another, not side by side, and cap
+  each attempt with `--max-steps N` so one model cannot spend it all.
+- **Do small tasks yourself.** Measured: a change you can make in a few turns costs more
+  through the kit (delegating, waiting and reading verdicts are turns too). Delegate work
+  that would take you many turns.
+- `--model` tries only the models you name (repeat it for several, in order); add
+  `--fallback` to let the kit go on to others after them.
 - **Run independent tasks at the same time** when the budget allows. Each delegation takes
   its own working copy, so start them as separate background commands (one per `--scope`,
   e.g. `rust` and `kotlin`) and handle each verdict when it arrives. Do not poll in between.

@@ -149,7 +149,7 @@ def cmd_delegate(args) -> int:
             _root(args), text, role=args.role, model=args.model,
             verify_cmd=args.verify, max_attempts=args.attempts,
             scope=args.scope or None, holdout_cmd=args.holdout, resume=args.resume,
-            on=args.on,
+            on=args.on, fallback=args.fallback, max_steps=args.max_steps,
         )
     except delegate.DelegateError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -198,7 +198,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--task", help="the task text")
     p.add_argument("--task-file", help="file holding the task text")
     p.add_argument("--role", default="build", help="explore | plan | build | review")
-    p.add_argument("--model", help="force a model (must be acceptable under the policy)")
+    p.add_argument("--model", action="append", metavar="MODEL",
+                   help="try only this model (repeatable, tried in order; each must be "
+                        "acceptable under the policy)")
+    p.add_argument("--fallback", action="store_true",
+                   help="after the --model ones, go on to other acceptable models")
+    p.add_argument("--max-steps", type=int, metavar="N",
+                   help="stop an attempt after N model requests (0: no limit); "
+                        "default from .offload/config.json")
     p.add_argument("--verify", help="check command, overriding .offload/config.json")
     p.add_argument("--attempts", type=int, default=3, help="models to try on infrastructure failure")
     p.add_argument("--scope", action="append", metavar="PATH",

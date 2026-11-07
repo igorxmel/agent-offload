@@ -110,6 +110,11 @@ The saving is real but modest on a task this size, and it was paid for in time. 
 was sequential; parallel slots and free first review came out of it. The full numbers,
 including what did not work, are in [AGENTS.md](AGENTS.md#measuring-the-saving).
 
+**On a small task the kit loses.** A second A/B (2026-11-07, due dates in the two cores
+only): the orchestrator alone finished in 6 minutes and 22 responses. Through the kit it
+spent about 40% of that before the free daily allowance ran out, with nothing delivered.
+Delegate work that would take your orchestrator many turns, not a few.
+
 **What free models built** in the todo-sync experiment, every piece behind hidden checks
 the executor never saw: a merge core in Rust and in Kotlin, UDP discovery and TCP sync on
 both, a Windows app and an Android app that sync over real Wi-Fi in 1-2 seconds.
@@ -133,6 +138,7 @@ both, a Windows app and an Android app that sync over real Wi-Fi in 1-2 seconds.
 | OpenCode worked in the caller's folder, not the project | the executor's `PWD` is always the project |
 | An executor tried to edit its own limits | the work is discarded, exit 5 |
 | Ten minutes of work vanished when a daily limit hit | unverified work goes to `<branch>-partial-N`; continue with `--resume` |
+| A named model failed and the kit spent the shared free allowance on models nobody named | `--model` tries only the named ones (`--fallback` to go on); `--max-steps N` caps one attempt |
 | A tiny model was tried first because it led the list | untried models are ordered by catalog facts: context size, then release date |
 
 ## Commands
@@ -145,8 +151,8 @@ offload allow|deny <model|provider/*>
 offload discover                     refresh models, prices, privacy terms
 offload budget                       today's executor requests per provider, quota stops
 offload delegate --task-file F       hand a task over, get a verdict
-    --scope PATH  --holdout CMD  --resume BRANCH  --model M  --verify CMD
-    --role review|explore|plan  --on BRANCH
+    --scope PATH  --holdout CMD  --resume BRANCH  --model M (repeatable)  --verify CMD
+    --fallback  --max-steps N  --role review|explore|plan  --on BRANCH
 ```
 
 Every command takes `--json` (before the command name). Exit codes: `0` passed, `2` no

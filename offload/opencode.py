@@ -152,6 +152,8 @@ class AgentResult:
     timed_out: bool = False
     # Killed because nothing new arrived on stdout or stderr for too long.
     stalled: bool = False
+    # Stopped by the caller's `watch`, e.g. at a step limit.
+    over_budget: bool = False
 
 
 def _kill_tree(process: subprocess.Popen) -> None:
@@ -186,7 +188,7 @@ def agent_env(root: Path) -> dict[str, str]:
 
 def run_agent(
     root: Path, agent: str, model: str, message: str, task_file: Path, timeout: int,
-    stall_timeout: int = 0, session: str | None = None,
+    stall_timeout: int = 0, session: str | None = None, watch=None, watch_every: float = 30,
 ) -> AgentResult:
     """Runs one executor and waits for it, killing it on timeout or on a stall.
 
@@ -197,6 +199,9 @@ def run_agent(
     A stall is `stall_timeout` seconds without a byte on stdout or stderr: OpenCode
     prints each step as it happens, so silence means the provider stopped
     answering. 0 disables the check.
+
+    `watch`, when given, is called every `watch_every` seconds; True stops the run
+    (`over_budget`), e.g. at a step limit read from the session itself.
     """
     started = time.monotonic()
     extra = {"start_new_session": True} if os.name != "nt" else {}
@@ -227,14 +232,22 @@ def run_agent(
     for reader in readers:
         reader.start()
 
-    timed_out = stalled = False
+    timed_out = stalled = over_budget = False
+    next_watch = started + watch_every
     while process.poll() is None:
         now = time.monotonic()
         if now - started > timeout:
             timed_out = True
         elif stall_timeout and now - last_activity[0] > stall_timeout:
             stalled = True
-        if timed_out or stalled:
+        elif watch and now >= next_watch:
+            next_watch = now + watch_every
+            try:
+                over_budget = bool(watch())
+            except (OpenCodeError, OSError, ValueError, KeyError, TypeError):
+                # a failed look must not kill a working executor
+                over_budget = False
+        if timed_out or stalled or over_budget:
             _kill_tree(process)
             break
         time.sleep(0.5)
@@ -252,4 +265,5 @@ def run_agent(
         seconds=time.monotonic() - started,
         timed_out=timed_out,
         stalled=stalled,
+        over_budget=over_budget,
     )

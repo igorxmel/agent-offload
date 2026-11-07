@@ -36,6 +36,11 @@ class Config:
     # Files the executor leaves behind that are larger than this (kilobytes) are
     # discarded: heap dumps and build outputs do not belong in a commit.
     max_file_kb: int = 5120
+    # Model requests one attempt may make before it is stopped (its work is kept
+    # as partial). A free daily allowance is counted in requests, so this keeps one
+    # attempt from spending all of it. 0 means no limit: finished runs took up to
+    # 134 steps, so a default would cut good work.
+    max_steps: int = 0
     # Git-ignored files a delegation's working copy needs, copied in from the
     # project (relative paths), e.g. an Android SDK path in `local.properties`.
     worktree_copy: list[str] = field(default_factory=list)
@@ -58,6 +63,7 @@ class Config:
             "verify_timeout": self.verify_timeout,
             "stall_timeout": self.stall_timeout,
             "max_file_kb": self.max_file_kb,
+            "max_steps": self.max_steps,
             "quota_cooldown_hours": self.quota_cooldown_hours,
             "worktree_copy": self.worktree_copy,
             "scope": self.scope,
@@ -77,6 +83,7 @@ def load(root: Path) -> Config:
         verify_timeout=int(data.get("verify_timeout", base.verify_timeout)),
         stall_timeout=int(data.get("stall_timeout", base.stall_timeout)),
         max_file_kb=int(data.get("max_file_kb", base.max_file_kb)),
+        max_steps=int(data.get("max_steps", base.max_steps)),
         quota_cooldown_hours=float(data.get("quota_cooldown_hours", base.quota_cooldown_hours)),
         worktree_copy=list(data.get("worktree_copy", [])),
         scope=list(data.get("scope", [])),

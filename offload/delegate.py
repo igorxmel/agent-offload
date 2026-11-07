@@ -198,23 +198,34 @@ def _on_tip(root: Path, on: str | None, role: str) -> str | None:
     return tip
 
 
-def _candidates(root, snapshot, role: str, model: str | None, skip: set[str]) -> list[str]:
+def _named(model: str | list[str] | None) -> list[str]:
+    return [model] if isinstance(model, str) else list(dict.fromkeys(model or []))
+
+
+def _candidates(root, snapshot, role: str, named: list[str], skip: set[str],
+                fallback: bool = False) -> list[str]:
     """Every model that may be tried, best first, without providers whose quota is
     exhausted. The attempt limit is applied while trying, not here: a quota stop
     met on the way removes a whole provider, and the next candidates must come
     from the others.
 
-    A model the person named explicitly is tried even then: they asked for it.
+    Models the person named are the only ones tried, in their order, even when
+    their provider's quota was marked exhausted: they asked for them. Others
+    follow only with `fallback`: in the A/B of 2026-11-07 a silent fallback to
+    models nobody named spent the shared free allowance of a parallel run.
     """
     ranked = [c.model for c in select.ranked(root, snapshot, role)]
     if not ranked:
         raise DelegateError("no acceptable model. See: offload models", code=2)
-    if model:
-        if model not in ranked:
-            reason = next((e.reason for e in snapshot.entries if e.id == model), "unknown model")
-            raise DelegateError(f"{model} is not acceptable under the project policy: {reason}", 2)
-        rest = [m for m in ranked if m != model and quota.provider(m) not in skip]
-        return [model] + rest
+    if named:
+        for model in named:
+            if model not in ranked:
+                reason = next((e.reason for e in snapshot.entries if e.id == model),
+                              "unknown model")
+                raise DelegateError(
+                    f"{model} is not acceptable under the project policy: {reason}", 2)
+        rest = [m for m in ranked if m not in named and quota.provider(m) not in skip]
+        return named + (rest if fallback else [])
     usable = [m for m in ranked if quota.provider(m) not in skip]
     if not usable:
         raise DelegateError(
@@ -229,7 +240,7 @@ def delegate(
     root: Path,
     task: str,
     role: str = "build",
-    model: str | None = None,
+    model: str | list[str] | None = None,
     verify_cmd: str | None = None,
     max_attempts: int = 3,
     scope: list[str] | None = None,
@@ -241,6 +252,8 @@ def delegate(
     now=time.time,
     usage_reader=None,
     session_reader=None,
+    fallback: bool = False,
+    max_steps: int | None = None,
 ) -> Verdict:
     started = time.monotonic()
     cfg = config.load(root)
@@ -249,11 +262,16 @@ def delegate(
     on_tip = _on_tip(root, on, role)
     fresh = snapshot is None
     snapshot = snapshot or discover.discover(root)
-    if model and fresh and model not in {e.id for e in snapshot.entries}:
+    named = _named(model)
+    if fresh and any(m not in {e.id for e in snapshot.entries} for m in named):
         # A provider connected after the last discovery: look again before refusing.
         snapshot = discover.discover(root, refresh=True)
     skip = quota.exhausted(root, cfg.quota_cooldown_hours)
-    candidates = _candidates(root, snapshot, role, model, skip)
+    candidates = _candidates(root, snapshot, role, named, skip, fallback)
+    max_steps = cfg.max_steps if max_steps is None else max_steps
+    # Providers that reported an exhausted quota during this run: skipped even
+    # for named models, the stop is seconds old.
+    exhausted_now: set[str] = set()
 
     base = resume_tip or gitops.head(root)
     stamp = f"{int(now())}-{uuid.uuid4().hex[:6]}"  # unique even for two runs in one second
@@ -319,14 +337,20 @@ def delegate(
         for candidate in candidates:
             if spent >= max_attempts:
                 continue  # not `break`: the `else` below must still run
-            if quota.provider(candidate) in skip and candidate != model:
+            provider = quota.provider(candidate)
+            if provider in exhausted_now or (provider in skip and candidate not in named):
                 continue  # an earlier attempt in this run exhausted this provider
             session = opencode.new_session_id()
+            watch = None
+            if max_steps:
+                def watch(s=session):
+                    used = session_reader(work, s)
+                    return bool(used) and used["steps"] >= max_steps
             result = executor(
                 work, f"offload-{role}", candidate, MESSAGE, Path(relative_task),
-                cfg.executor_timeout, cfg.stall_timeout, session,
+                cfg.executor_timeout, cfg.stall_timeout, session, watch,
             )
-            outcome, detail = _classify(result)
+            outcome, detail = _classify(result, max_steps)
             verdict.attempts.append(Attempt(candidate, outcome, round(result.seconds, 1), detail,
                                             session_reader(work, session)))
             if outcome == "ok":
@@ -334,7 +358,8 @@ def delegate(
                 break
             if outcome == "quota":
                 quota.mark(root, candidate)
-                skip.add(quota.provider(candidate))
+                skip.add(provider)
+                exhausted_now.add(provider)
             else:
                 spent += 1
             if writes:  # whatever stopped it, finished steps are not thrown away
@@ -532,8 +557,10 @@ def _error_detail(result) -> str:
     return useful[-1][:200] if useful else ""
 
 
-def _classify(result) -> tuple[str, str]:
+def _classify(result, max_steps: int = 0) -> tuple[str, str]:
     """Infrastructure outcome of one executor run, separate from result quality."""
+    if getattr(result, "over_budget", False):
+        return "steps", f"stopped at the step limit ({max_steps}) after {result.seconds:.0f}s"
     if getattr(result, "stalled", False):
         return "stall", f"no output for too long, killed after {result.seconds:.0f}s"
     if result.timed_out:

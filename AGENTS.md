@@ -219,6 +219,13 @@ and every one was checked by mutation.
 - **`PWD`**: see "Verified behaviour" above.
 - An explicit `--model` missing from the cached snapshot (a provider connected after the
   last `discover`) triggers one refresh instead of "unknown model".
+- **Named models** (`delegate`): with `--model` (repeatable) only those are tried, in
+  order; `--fallback` adds the other acceptable ones after them. A provider that reported
+  a quota stop during this run is skipped even for a named model.
+- **Step limit** (`opencode.run_agent` `watch`): with `max_steps` / `--max-steps N` the kit
+  reads the attempt's own session every 30 s and stops it at N requests; the outcome is
+  `steps`, it counts as an attempt and its work is kept as partial. Off by default:
+  finished runs have taken up to 134 steps.
 - **Executor usage**: every attempt runs with its own session id (`opencode run --session
   <id>` creates it), and `opencode session export <id>` gives that session's tokens; steps
   are its assistant messages. `opencode stats` cannot do this: it counts per project, and
@@ -320,6 +327,34 @@ volunteer pool without tool calls, a reverse-engineered Cloudflare endpoint, Duc
 (marked "avoid" in its own catalog) and an unknown proxy; the key-based ones were either
 already connected in OpenCode directly or no longer free (Mistral). Nothing of it is used.
 
+### Small A/B (2026-11-07): due dates in the two cores only
+
+A smaller task (`due` in the Rust and Kotlin cores and nodes, no list order, no UI), fresh
+scheduled sessions on Opus 5.5, warm builds and slots, a narrow visible check that fails on
+the base only at `due_survives_sync`.
+
+| | A2: alone | C2: through the kit |
+|---|---|---|
+| wall time | 6 min, done, check passes | 9 min, stopped, nothing delivered |
+| orchestrator responses | 22 | 12 |
+| orchestrator output | 18.2k | 6.3k |
+| cache write / cache read | 85k / 2.28M | 44k / 0.92M |
+
+C2 started both sides at once on two named models. The Rust model
+(`cohere/north-mini-code:free`) made 46 requests with 1.67M input tokens and no cache
+reads, then failed an exact-match edit; the kit then moved on to models nobody named
+(a Zen model, `stealth/crouton-alpha`, the spare). OpenRouter's account-wide allowance
+was gone after 66 requests in all, stopping the Kotlin side too. Both sides' work is on
+`-partial-1` branches in the C2 clone, unverified.
+
+What it says:
+- **On a small task the kit cannot win.** The orchestrator alone finished in 22 responses;
+  most of a session's cost is the fixed context re-read on every turn, and delegating,
+  waiting and reading verdicts takes turns of its own. C2 had already spent about 40% of
+  A2's cost when it stopped. Delegate tasks that would take the orchestrator many turns.
+- **An explicit `--model` now means only that model** (fixed; `--fallback` brings the old
+  behaviour back), and `--max-steps` stops one attempt before it spends a whole allowance.
+
 ## Language
 
 Everything inside the repository - code, comments, messages, templates, docs - is
@@ -342,8 +377,8 @@ docs, build, test, chore. Do not add yourself as a co-author.
 
 ## Not done yet
 
-- Partial work is thrown away on a timeout or a stall. Nemotron's 12 useful minutes were
-  lost that way; keeping such work on a branch marked unverified might be worth it.
+- A conformance check on raw output, so ignoring a field cannot pass (see the weakness
+  noted under the first A/B).
 - Model choice without history is a guess in catalog order. The catalog also has context
   size and release date, which could order the guesses without naming any model.
 - Hints for orchestrators other than Claude - after checking how each environment reads

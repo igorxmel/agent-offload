@@ -7,6 +7,15 @@
   last seen.
 - Executor usage is now exact per delegation and per attempt, read from each attempt's own
   OpenCode session; overlapping delegations no longer report the same combined numbers.
+- `--max-steps N` (and `max_steps` in the config): an attempt is stopped after N model
+  requests and its work is kept as partial, so one attempt cannot spend a whole free
+  daily allowance.
+- `--model` is repeatable: the named models are tried in order. `--fallback` goes on to
+  other acceptable models after them.
+
+### Changed
+- With `--model`, only the named models are tried. Before, a failure moved on to models
+  nobody named, which spent the shared free allowance of a parallel delegation.
 
 ### Fixed
 - Read-only roles no longer count the person's own uncommitted edits as the executor's

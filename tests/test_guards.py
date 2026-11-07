@@ -271,6 +271,84 @@ def test_executor_gets_the_project_as_pwd(tmp_path, monkeypatch) -> None:
     assert Path(result.stdout.strip()).resolve() == root.resolve()
 
 
+def test_watch_stops_a_run_that_reached_its_limit(tmp_path, monkeypatch) -> None:
+    root = _fake_opencode(tmp_path, monkeypatch, (
+        "import time\nfor i in range(60):\n    print('step', i, flush=True)\n    time.sleep(0.5)\n"
+    ))
+    looks = []
+    result = opencode.run_agent(root, "a", "m", "msg", Path("t.md"), timeout=50,
+                                watch=lambda: looks.append(1) or len(looks) >= 2, watch_every=1)
+    assert result.over_budget and not result.stalled and result.seconds < 20
+    assert delegate._classify(result, 40) == ("steps", delegate._classify(result, 40)[1])
+    assert "step limit (40)" in delegate._classify(result, 40)[1]
+
+
+def test_step_limit_counts_as_an_attempt_and_keeps_the_work(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    tried = []
+
+    def executor(work, agent, model, message, task_file, timeout, stall, session, watch):
+        tried.append(model)
+        (work / "half.txt").write_text("x\n", encoding="utf-8")
+        assert watch() is True  # the reader below already says 50 steps
+        return AgentResult(1, "", "", 3.0, over_budget=True)
+
+    verdict = delegate.delegate(root, "x", snapshot=snapshot("p/m1", "q/m2"), executor=executor,
+                                max_attempts=1, max_steps=50,
+                                session_reader=lambda w, s: _totals(50, 1, 1, 0.0))
+    assert tried == ["p/m1"]
+    assert verdict.attempts[0].outcome == "steps" and verdict.partial
+
+
+# --- named models ------------------------------------------------------------------
+
+
+def _recording(tried, fail=()):
+    def executor(work, agent, model, *rest):
+        tried.append(model)
+        if model in fail:
+            return AgentResult(1, "", "Error: Could not find oldString", 1.0)
+        return writer({"new.txt": "x\n"})(work, agent, model, *rest[:3])
+    return executor
+
+
+def test_named_models_are_the_only_ones_tried(tmp_path) -> None:
+    # Seen in the A/B of 2026-11-07: one named model failed, and the kit went on to
+    # models nobody named, spending the free allowance a parallel run needed.
+    root = make_repo(tmp_path)
+    tried = []
+    verdict = delegate.delegate(root, "x", model=["p/a"], snapshot=snapshot("p/a", "q/b", "r/c"),
+                                executor=_recording(tried, fail={"p/a"}))
+    assert tried == ["p/a"] and verdict.status == "executor_error"
+
+
+def test_several_named_models_are_tried_in_order_then_fallback(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    tried = []
+    delegate.delegate(root, "x", model=["r/c", "p/a"], snapshot=snapshot("p/a", "q/b", "r/c"),
+                      executor=_recording(tried, fail={"r/c", "p/a"}))
+    assert tried == ["r/c", "p/a"]
+    tried.clear()
+    verdict = delegate.delegate(root, "x", model=["r/c"], fallback=True,
+                                snapshot=snapshot("p/a", "q/b", "r/c"),
+                                executor=_recording(tried, fail={"r/c"}))
+    assert tried[0] == "r/c" and len(tried) == 2 and verdict.status == "passed"
+
+
+def test_named_model_skips_a_provider_exhausted_in_this_run(tmp_path) -> None:
+    root = make_repo(tmp_path)
+    tried = []
+
+    def executor(work, agent, model, *rest):
+        tried.append(model)
+        return _quota_result() if model == "zen/a" else writer({"new.txt": "x\n"})(
+            work, agent, model, *rest[:3])
+
+    verdict = delegate.delegate(root, "x", model=["zen/a", "zen/b", "or/c"],
+                                snapshot=snapshot("zen/a", "zen/b", "or/c"), executor=executor)
+    assert tried == ["zen/a", "or/c"] and verdict.status == "passed"
+
+
 # --- file size -------------------------------------------------------------------
 
 
@@ -338,7 +416,7 @@ def test_usage_comes_from_each_attempts_own_session(tmp_path) -> None:
     root = make_repo(tmp_path)
     sessions = []
 
-    def executor(work, agent, model, message, task_file, timeout, stall, session):
+    def executor(work, agent, model, message, task_file, timeout, stall, session, watch):
         sessions.append(session)
         if model == "p/m1":
             return AgentResult(1, "", "Error: boom", 1.0)
