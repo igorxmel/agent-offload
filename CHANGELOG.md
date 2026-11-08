@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-11-08
 
 ### Added
 - `offload budget`: today's executor requests per provider, and where a quota stop was

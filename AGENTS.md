@@ -225,7 +225,9 @@ and every one was checked by mutation.
 - **Step limit** (`opencode.run_agent` `watch`): with `max_steps` / `--max-steps N` the kit
   reads the attempt's own session every 30 s and stops it at N requests; the outcome is
   `steps`, it counts as an attempt and its work is kept as partial. Off by default:
-  finished runs have taken up to 134 steps.
+  finished runs have taken up to 134 steps. Live on 2026-11-08 (`--max-steps 2`, one
+  named model): stopped after 33 s at 6 steps - it can overshoot by what fits in the
+  30 s between looks - and no other model was tried.
 - **Executor usage**: every attempt runs with its own session id (`opencode run --session
   <id>` creates it), and `opencode session export <id>` gives that session's tokens; steps
   are its assistant messages. `opencode stats` cannot do this: it counts per project, and
